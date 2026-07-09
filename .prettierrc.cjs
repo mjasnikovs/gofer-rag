@@ -1,0 +1,21 @@
+// Copied from ~/hub/aiz-server (spaces variant — unified for the whole monorepo).
+module.exports = {
+    experimentalTernaries: true,
+    experimentalOperatorPosition: 'start',
+    printWidth: 120,
+    tabWidth: 4,
+    useTabs: false,
+    semi: false,
+    singleQuote: true,
+    quoteProps: 'as-needed',
+    jsxSingleQuote: true,
+    trailingComma: 'none',
+    bracketSpacing: false,
+    objectWrap: 'preserve',
+    bracketSameLine: false,
+    arrowParens: 'avoid',
+    proseWrap: 'always',
+    htmlWhitespaceSensitivity: 'strict',
+    endOfLine: 'lf',
+    singleAttributePerLine: true
+}
