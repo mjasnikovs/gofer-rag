@@ -82,11 +82,22 @@ LanceDB's built-in providers include **OpenAI**, **Sentence Transformers**, **Hu
 
 ## Recommended Pipeline for `.epub` → LanceDB
 
-1. **Parse EPUB** → `epub` or `@lingo-reader/epub-parser` to extract chapter text
-2. **Strip HTML** (if using `getChapter()` which returns HTML) — e.g., with `turndown` or `linkedom`
-3. **Chunk the text** — split into ~1000-char chunks with overlap
-4. **Embed** — use a LanceDB embedding function (built-in like OpenAI/Sentence Transformers, or your own custom one)
-5. **Upsert into LanceDB** — store vectors + metadata (chapter title, page range, etc.)
+> **Note:** Don't copy AnythingLLM's `splitChapters: false` blob-concatenation. EPUB already carries clean structural boundaries (chapters, headings, TOC) — those are the single most valuable retrieval signal, so preserve them instead of flattening the book into one text blob.
+
+### Baseline (best value — start here)
+
+1. **Parse EPUB preserving structure** → `epub` or `@lingo-reader/epub-parser`, keeping chapter/heading boundaries and the TOC. (On **Bun**: smoke-test the parser first — these libs lean on Node zip/stream internals.)
+2. **Strip HTML** (if using `getChapter()` which returns HTML) — e.g., with `turndown` or `linkedom`.
+3. **Chunk with structure awareness** — recursive splitting at **~400–512 tokens** with overlap, *snapped to chapter/section boundaries* (never let a chunk cross a chapter). This baseline measured ~85–90% recall in Chroma's tests without extra computational cost. Prefer token-based sizing over raw char counts.
+4. **Attach rich metadata** — `{ book, chapter title, section/heading, order }`. Metadata gives retrieval signals beyond pure vector similarity.
+5. **Embed** — use a LanceDB embedding function (built-in OpenAI/Sentence Transformers, or a custom one).
+6. **Upsert into LanceDB** — store vectors + metadata.
+
+### Upgrades (only if baseline retrieval is insufficient)
+
+- **Semantic chunking + merge** — split on embedding-similarity drops, then *merge* fragments up to ~200–400 tokens. The merge step is not optional: naked semantic chunking produces ~43-token fragments that *hurt* accuracy (FloTorch found it ~15 pts behind recursive splitting); merging recovers it and can add ~9% recall. Tune the threshold: **0.7–0.8** for technical docs (e.g. a Godot manual), **0.5–0.6** for narrative prose.
+- **Late chunking** ([Jina](https://jina.ai/news/late-chunking-in-long-context-embedding-models/)) — embed the whole long text first with a long-context model, then pool into chunks *after* the transformer, so each chunk embedding carries whole-document context. Strong gains on long documents, and **no extra LLM calls**.
+- **Contextual retrieval** ([Anthropic](https://www.anthropic.com/news/contextual-retrieval)) — prepend a 50–100 token LLM-generated context blurb to each chunk before embedding. ~5–15% precision gain, but costs one LLM call per chunk.
 
 ## References
 
@@ -95,3 +106,8 @@ LanceDB's built-in providers include **OpenAI**, **Sentence Transformers**, **Hu
 - [LanceDB Custom Embedding Functions](https://lancedb.github.io/lancedb/embeddings/custom_embedding_function/)
 - [EPUB Support Feature Request (#709)](https://github.com/Mintplex-Labs/anything-llm/issues/709)
 - [EPUB Bug Report (#3418)](https://github.com/Mintplex-Labs/anything-llm/issues/3418)
+- [Best Chunking Strategies for RAG in 2026 (Firecrawl)](https://www.firecrawl.dev/blog/best-chunking-strategies-rag)
+- [Semantic Chunking: 5 Best Practices (Extend)](https://www.extend.ai/resources/semantic-chunking-methods-5-best-practices-rag-results)
+- [Late Chunking in Long-Context Embedding Models (Jina)](https://jina.ai/news/late-chunking-in-long-context-embedding-models/)
+- [Late Chunking paper (arXiv 2409.04701)](https://arxiv.org/abs/2409.04701)
+- [Contextual Retrieval (Anthropic)](https://www.anthropic.com/news/contextual-retrieval)
