@@ -1,15 +1,25 @@
 {
-    "devDependencies": {
-        "@eslint/js": "10.0.1",
-        "@types/bun": "1.3.14",
-        "eslint": "10.6.0",
-        "globals": "17.7.0",
-        "prettier": "3.9.4",
-        "typescript": "6.0.3",
-        "typescript-eslint": "8.63.0"
-    },
-    "scripts": {
-        "lint": "prettier --log-level warn --write 'src/**/*.ts' && eslint --fix . && tsc --noEmit",
-        "test": "AGENT=1 bun test"
-    }
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.3.14",
+    "eslint": "10.6.0",
+    "globals": "17.7.0",
+    "prettier": "3.9.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0"
+  },
+  "scripts": {
+    "rag-update": "bun run ingest/rag-update.ts",
+    "serve": "bun run scripts/serve.ts",
+    "lint": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' && eslint --fix . && tsc --noEmit",
+    "test": "AGENT=1 bun test"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0",
+    "@lancedb/lancedb": "0.31.0",
+    "epub2": "3.0.2"
+  },
+  "trustedDependencies": [
+    "onnxruntime-node"
+  ]
 }
