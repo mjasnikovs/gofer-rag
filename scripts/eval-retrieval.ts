@@ -4,7 +4,14 @@
 // involved — this exercises embed → candidates → rerank → threshold, the same
 // logic as retrieve().
 //
-//   bun run scripts/eval-retrieval.ts
+//   bun run scripts/eval-retrieval.ts             quiet: one summary line, exit 1 on fail
+//   bun run scripts/eval-retrieval.ts --verbose   full per-question table + timings
+//   bun run scripts/eval-retrieval.ts --compare   also run the vector-only reference
+//
+// Verdict = the hybrid column: PASS when it clears the baseline (10/10, the 2
+// must-refuse cases included). The vector-only reference is hidden by default —
+// it is expected to be worse, doubles runtime, and its FAILs are not real
+// failures. Timings are diagnostics, never part of pass/fail.
 //
 // PASS for a doc question  = a chunk from an expected chapter is among the
 //                            kept results (score ≥ rerankThreshold, top rerankKeep).
@@ -35,29 +42,36 @@ const cases: Case[] = [
     {question: 'Who won the 2022 FIFA World Cup?'}
 ]
 
-console.log('Loading models ...')
+const argv = process.argv.slice(2)
+const verbose = argv.includes('--verbose')
+const compare = argv.includes('--compare')
+
+// Hybrid must clear this many cases — the recorded baseline is 10/10.
+const HYBRID_MIN = cases.length
+
+if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
 
-// Both modes share the production rerank/threshold/keep logic; they differ
-// only in how the candidate pool is built. "hybrid" is what retrieve() does;
-// "vector-only" is kept as the reference the pipeline graduated from.
-const modes = [
-    {
-        name: 'vector-only',
-        candidates: async (_q: string, vector: number[]) => vectorSearch(vector, config.vectorTopK)
-    },
-    {
-        name: 'hybrid',
-        candidates: async (q: string, vector: number[]) => {
-            const [vec, fts, titles] = await Promise.all([
-                vectorSearch(vector, config.vectorTopK),
-                ftsSearch(q, config.ftsTopK),
-                titleSearch(q, config.titleTopK)
-            ])
-            return [...new Map(vec.concat(fts, titles).map(c => [c.id, c])).values()]
-        }
+// Both modes share the production rerank/threshold/keep logic; they differ only
+// in how the candidate pool is built. "hybrid" is what retrieve() does and is
+// the verdict; "vector-only" is the reference the pipeline graduated from, run
+// only under --compare.
+const vectorOnly = {
+    name: 'vector-only',
+    candidates: async (_q: string, vector: number[]) => vectorSearch(vector, config.vectorTopK)
+}
+const hybrid = {
+    name: 'hybrid',
+    candidates: async (q: string, vector: number[]) => {
+        const [vec, fts, titles] = await Promise.all([
+            vectorSearch(vector, config.vectorTopK),
+            ftsSearch(q, config.ftsTopK),
+            titleSearch(q, config.titleTopK)
+        ])
+        return [...new Map(vec.concat(fts, titles).map(c => [c.id, c])).values()]
     }
-]
+}
+const modes = compare ? [vectorOnly, hybrid] : [hybrid]
 
 type CellResult = {pass: boolean; ms: number; pool: number; kept: string[]}
 const results = new Map<string, CellResult[]>() // question → one cell per mode
@@ -81,25 +95,38 @@ for (const c of cases) {
             .slice(0, config.rerankKeep)
         const pass = c.expect ? kept.some(x => c.expect!.test(x.chapter)) : kept.length === 0
         row.push({pass, ms, pool: pool.length, kept: kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`)})
-        if (c.expect && !pass) {
-            console.log(`\n${c.question} [${mode.name}] FAIL — expected chapter ${inPool ? 'was in pool but lost at rerank' : 'not in candidate pool'}`)
-            console.log(`  kept: ${kept.length ? kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`).join(' | ') : '(nothing above threshold)'}`)
-        }
-        if (!c.expect && !pass) {
-            console.log(`\n${c.question} [${mode.name}] FAIL — refusal gate broke, kept: ${kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`).join(' | ')}`)
+        // Detail only for real failures: the hybrid verdict always, the
+        // vector-only reference only under --verbose.
+        if (!pass && (mode.name === 'hybrid' || verbose)) {
+            if (c.expect) {
+                console.log(`FAIL  ${c.question} [${mode.name}] — expected chapter ${inPool ? 'was in pool but lost at rerank' : 'not in candidate pool'}`)
+                console.log(`  kept: ${kept.length ? kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`).join(' | ') : '(nothing above threshold)'}`)
+            } else {
+                console.log(`FAIL  ${c.question} [${mode.name}] — refusal gate broke, kept: ${kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`).join(' | ')}`)
+            }
         }
     }
     results.set(c.question, row)
-    const cells = row.map((r, i) => `${modes[i]!.name}: ${r.pass ? 'PASS' : 'FAIL'} (pool ${r.pool}, ${(r.ms / 1000).toFixed(1)}s)`).join('  ')
-    console.log(`\n${c.question}\n  ${cells}`)
+    if (verbose) {
+        const cells = row.map((r, i) => `${modes[i]!.name}: ${r.pass ? 'PASS' : 'FAIL'} (pool ${r.pool}, ${(r.ms / 1000).toFixed(1)}s)`).join('  ')
+        console.log(`\n${c.question}\n  ${cells}`)
+    }
 }
 
-console.log('\n=== summary ===')
-for (const [i, mode] of modes.entries()) {
-    const rows = [...results.values()].map(r => r[i]!)
-    const passes = rows.filter(r => r.pass).length
-    const meanMs = rows.reduce((s, r) => s + r.ms, 0) / rows.length
-    const maxMs = Math.max(...rows.map(r => r.ms))
-    console.log(`${mode.name.padEnd(12)} ${passes}/${cases.length} pass   rerank mean ${(meanMs / 1000).toFixed(1)}s  max ${(maxMs / 1000).toFixed(1)}s`)
+if (verbose) {
+    console.log('\n=== summary ===')
+    for (const [i, mode] of modes.entries()) {
+        const rows = [...results.values()].map(r => r[i]!)
+        const passes = rows.filter(r => r.pass).length
+        const meanMs = rows.reduce((s, r) => s + r.ms, 0) / rows.length
+        const maxMs = Math.max(...rows.map(r => r.ms))
+        console.log(`${mode.name.padEnd(12)} ${passes}/${cases.length} pass   rerank mean ${(meanMs / 1000).toFixed(1)}s  max ${(maxMs / 1000).toFixed(1)}s`)
+    }
 }
-process.exit(0)
+
+// Verdict = the hybrid column only.
+const hybridIdx = modes.findIndex(m => m.name === 'hybrid')
+const hybridPasses = [...results.values()].filter(r => r[hybridIdx]!.pass).length
+const ok = hybridPasses >= HYBRID_MIN
+console.log(`retrieval: ${ok ? 'PASS' : 'FAIL'}  ${hybridPasses}/${cases.length} hybrid (min ${HYBRID_MIN})`)
+process.exit(ok ? 0 : 1)

@@ -4,7 +4,11 @@
 // part of retrieval with no programmatic ground truth, hence a hand-written
 // set; it doubles as the regression suite for any embedder swap.
 //
-//   bun run scripts/eval-paraphrase.ts
+//   bun run scripts/eval-paraphrase.ts             quiet: one summary line, exit 1 on fail
+//   bun run scripts/eval-paraphrase.ts --verbose   every question + timings
+//
+// Pass = at least 18/22 survive rerank (the recorded baseline; the handful of
+// borderline paraphrases below that are accepted). Timings are diagnostics.
 //
 // Each question lists the chapters a Godot developer would accept as the right
 // place to answer from (class-ref chapters count — the question just must not
@@ -45,7 +49,13 @@ const cases: Case[] = [
     {question: 'How do I add multiplayer over the network to my game?', expect: /multiplayer/i}
 ]
 
-console.log('Loading models ...')
+const argv = process.argv.slice(2)
+const verbose = argv.includes('--verbose')
+
+// At least this many questions must survive rerank — the recorded baseline is 18/22.
+const RERANK_MIN = 18
+
+if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
 
 let passPool = 0
@@ -74,10 +84,16 @@ for (const c of cases) {
     const pass = kept.some(x => c.expect.test(x.chapter))
     if (inPool) passPool++
     if (pass) passKept++
-    console.log(`${pass ? 'PASS' : inPool ? 'FAIL-rerank' : 'FAIL-pool'}  ${c.question}`)
+    // Quiet: only failing questions; --verbose: every question.
+    if (verbose || !pass) console.log(`${pass ? 'PASS' : inPool ? 'FAIL-rerank' : 'FAIL-pool'}  ${c.question}`)
     if (!pass) console.log(`    kept: ${kept.length ? kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`).join(' | ') : '(nothing above threshold)'}`)
 }
 
-console.log('\n=== summary ===')
-console.log(`candidate pool: ${passPool}/${cases.length}   after rerank: ${passKept}/${cases.length}   rerank mean ${(rerankMs / cases.length / 1000).toFixed(1)}s`)
-process.exit(0)
+if (verbose) {
+    console.log('\n=== summary ===')
+    console.log(`candidate pool: ${passPool}/${cases.length}   after rerank: ${passKept}/${cases.length}   rerank mean ${(rerankMs / cases.length / 1000).toFixed(1)}s`)
+}
+
+const ok = passKept >= RERANK_MIN
+console.log(`paraphrase: ${ok ? 'PASS' : 'FAIL'}  ${passKept}/${cases.length} after rerank (min ${RERANK_MIN})`)
+process.exit(ok ? 0 : 1)

@@ -12,7 +12,12 @@
     "rag-update": "bun run ingest/rag-update.ts",
     "serve": "bun run scripts/serve.ts",
     "lint": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' && eslint --fix . && tsc --noEmit",
-    "test": "AGENT=1 bun test"
+    "eval:retrieval": "bun run scripts/eval-retrieval.ts",
+    "eval:paraphrase": "bun run scripts/eval-paraphrase.ts",
+    "eval:coverage": "bun run scripts/eval-coverage.ts",
+    "eval:coverage:lowercase": "bun run scripts/eval-coverage.ts --lowercase",
+    "test": "bun run eval:retrieval && bun run eval:paraphrase && bun run eval:coverage && bun run eval:coverage:lowercase",
+    "test:llm": "bun run scripts/eval-llm-gate.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "4.2.0",

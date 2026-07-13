@@ -14,6 +14,12 @@
 //   bun run scripts/eval-coverage.ts --members all        # full 27k member sweep (~1h)
 //   bun run scripts/eval-coverage.ts --rerank 25          # + end-to-end retrieve() on 25 samples
 //   bun run scripts/eval-coverage.ts --lowercase          # class names typed lowercase ("sprite2d")
+//   bun run scripts/eval-coverage.ts --verbose            # per-kind breakdown, progress, all misses
+//
+// Quiet by default: one summary line, exit 1 on fail. The candidate stage is
+// the verdict — it must reach 100% (97% under --lowercase, where the ~46
+// single-English-word class misses are accepted). The --rerank block is an
+// end-to-end estimate/diagnostic and never affects the exit code.
 //
 // PASS (candidate stage) = the hybrid candidate pool (vector vectorTopK ∪ FTS
 // ftsTopK, exactly what retrieve() reranks) contains a chunk from the entity's
@@ -43,6 +49,10 @@ const rerankSample = Number(argOf('--rerank') ?? 0)
 // classes (Control, Timer, ...) are expected casualties — they stay
 // case-sensitive by design (see distinctiveTitle in src/store/db.ts).
 const lowercase = argv.includes('--lowercase')
+const verbose = argv.includes('--verbose')
+// Candidate-stage pass threshold. Baseline is 100%; --lowercase accepts the
+// ~46 single-English-word class misses, so it floors at 97%.
+const COVERAGE_MIN_PCT = lowercase ? 97 : 100
 
 // Deterministic RNG so a rerun samples the same entities.
 function mulberry32(seed: number) {
@@ -65,7 +75,7 @@ const sample = <T>(arr: T[], n: number): T[] => {
 }
 
 // --- inventory from the corpus ------------------------------------------------
-console.log('Building entity inventory from LanceDB ...')
+if (verbose) console.log('Building entity inventory from LanceDB ...')
 const db = await lancedb.connect(config.dbPath)
 const table = await db.openTable(config.table)
 const rows = (await table.query().select(['chapter', 'text']).toArray()) as {chapter: string; text: string}[]
@@ -128,13 +138,13 @@ const kindCount = (es: Entity[]) => {
     for (const e of es) c.set(e.kind, (c.get(e.kind) ?? 0) + 1)
     return [...c.entries()].map(([k, n]) => `${k}:${n}`).join(' ')
 }
-console.log(`inventory: ${classes.length} classes, ${members.length} unique members (${kindCount(members)})`)
+if (verbose) console.log(`inventory: ${classes.length} classes, ${members.length} unique members (${kindCount(members)})`)
 
 const testSet = [...classes, ...(memberArg === 'all' ? members : sample(members, Number(memberArg)))]
-console.log(`testing ${testSet.length} entities (members: ${memberArg})`)
+if (verbose) console.log(`testing ${testSet.length} entities (members: ${memberArg})`)
 
 // --- candidate-stage sweep ----------------------------------------------------
-console.log('Loading models ...')
+if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadTable(), rerankSample > 0 ? loadReranker() : Promise.resolve()])
 
 async function candidatePool(q: string): Promise<StoredChunk[]> {
@@ -161,24 +171,33 @@ for (const [i, e] of testSet.entries()) {
     if (pass) s.pass++
     else failures.push(e)
     passByKind.set(e.kind, s)
-    if ((i + 1) % 250 === 0) {
+    if (verbose && (i + 1) % 250 === 0) {
         const rate = (performance.now() - t0) / (i + 1)
         console.log(`  ${i + 1}/${testSet.length}  (${(rate / 1000).toFixed(2)}s/query, ~${Math.round(((testSet.length - i - 1) * rate) / 60000)}min left)`)
     }
 }
 
-console.log('\n=== candidate-stage coverage (pool = what the reranker would see) ===')
-for (const [kind, s] of passByKind) {
-    console.log(`${kind.padEnd(9)} ${s.pass}/${s.total}  (${((100 * s.pass) / s.total).toFixed(1)}%)`)
+if (verbose) {
+    console.log('\n=== candidate-stage coverage (pool = what the reranker would see) ===')
+    for (const [kind, s] of passByKind) {
+        console.log(`${kind.padEnd(9)} ${s.pass}/${s.total}  (${((100 * s.pass) / s.total).toFixed(1)}%)`)
+    }
 }
 const total = [...passByKind.values()].reduce((a, s) => ({pass: a.pass + s.pass, total: a.total + s.total}), {pass: 0, total: 0})
-console.log(`overall   ${total.pass}/${total.total}  (${((100 * total.pass) / total.total).toFixed(1)}%)`)
+const pct = (100 * total.pass) / total.total
+const ok = pct >= COVERAGE_MIN_PCT
+if (verbose) console.log(`overall   ${total.pass}/${total.total}  (${pct.toFixed(1)}%)`)
 
-if (failures.length > 0) {
+// Show the misses when the suite actually fails, or on --verbose. On a passing
+// --lowercase run the accepted single-word misses stay hidden.
+if (failures.length > 0 && (!ok || verbose)) {
     console.log(`\nfailures (${failures.length}):`)
     for (const f of failures.slice(0, 40)) console.log(`  [${f.kind}] ${f.cls}.${f.name} — "${f.question}"`)
     if (failures.length > 40) console.log(`  ... and ${failures.length - 40} more`)
 }
+
+const label = lowercase ? 'coverage-lowercase' : 'coverage'
+console.log(`${label}: ${ok ? 'PASS' : 'FAIL'}  ${total.pass}/${total.total} candidate ${pct.toFixed(1)}% (min ${COVERAGE_MIN_PCT}%)`)
 
 // --- end-to-end estimate on a sample (includes the reranker + threshold gate) --
 if (rerankSample > 0) {
@@ -192,4 +211,7 @@ if (rerankSample > 0) {
     }
     console.log(`end-to-end: ${pass}/${rerankSample} pass`)
 }
-process.exit(0)
+
+// Exit code reflects the candidate-stage verdict only; the --rerank estimate
+// above is a diagnostic.
+process.exit(ok ? 0 : 1)
