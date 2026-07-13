@@ -204,14 +204,57 @@ const label = lowercase ? 'coverage-lowercase' : 'coverage'
 console.log(`${label}: ${ok ? 'PASS' : 'FAIL'}  ${total.pass}/${total.total} candidate ${pct.toFixed(1)}% (min ${COVERAGE_MIN_PCT}%)`)
 
 // --- end-to-end estimate on a sample (includes the reranker + threshold gate) --
+
+// Chapters that answer the templated question about an entity as well as the
+// entity's own class-ref chapter does. The reranker often prefers the tutorial
+// that TEACHES a class over the class's reference page; counting those as
+// misses understated end-to-end quality. Every entry was justified by reading
+// the chapter (2026-07-13); an ALT only counts if the kept chunk also mentions
+// the entity by name, so the answer LLM really has usable context. Keyed by
+// class name or "Class.member".
+//
+// Deliberately NOT included, so they stay honest misses:
+//   BoxMesh                 kept chapters (SoftBody3D, lightmaps) are unrelated
+//   Curve                   "Beziers, curves and paths" documents Curve2D/3D,
+//                           never the Curve resource itself
+//   Tree.font               GUI skinning explains theming generally, not Tree's
+//                           font item
+//   CollisionObject3D       "Physics introduction" only ever names the 2D class
+//   ScriptLanguageExtension._get_recognized_extensions
+//                           kept docs describe the same-named method of OTHER
+//                           classes — wrong grounding for this question
+const ACCEPTED_ALTERNATIVES: Record<string, string[]> = {
+    // "adjust the Influence property in the PhysicalBoneSimulator3D node that
+    // is the parent of all PhysicalBone3D nodes" — explains the node's role.
+    PhysicalBoneSimulator3D: ['Ragdoll system'],
+    // The class's own tutorial: Expression.new() / parse() / execute() walkthrough.
+    Expression: ['Evaluating expressions'],
+    // The font-system tutorial; 19/23 chunks discuss Font directly.
+    Font: ['Using Fonts'],
+    // Contains the ZIPPacker save-archive sample code.
+    ZIPPacker: ['Runtime file loading and saving'],
+    // "nodes such as Sprite3D and AnimatedSprite3D can be used to create 2D
+    // games ... mixing with 3D backgrounds" — states exactly what it's for.
+    Sprite3D: ['Introduction to 3D'],
+    // "One or more DisplayServers, with the windowing methods implemented.
+    // DisplayServer also covers features such as mouse ..." — the class's role.
+    DisplayServer: ['Custom platform ports'],
+    // Object.tr_n() docs explain plural translation and defer to it: "To
+    // translate strings in a static context, use TranslationServer.translate_plural()".
+    'TranslationServer.translate_plural': ['Object']
+}
+
 if (rerankSample > 0) {
     console.log(`\n=== end-to-end retrieve() on ${rerankSample} random entities (rerank + threshold) ===`)
     let pass = 0
     for (const e of sample(testSet, rerankSample)) {
         const kept = await retrieve(e.question)
-        const hit = e.kind === 'class' ? kept.some(c => c.chapter === e.cls) : kept.some(c => c.chapter === e.cls && c.text.includes(e.name))
-        if (hit) pass++
+        const own = e.kind === 'class' ? kept.some(c => c.chapter === e.cls) : kept.some(c => c.chapter === e.cls && c.text.includes(e.name))
+        const alts = ACCEPTED_ALTERNATIVES[e.kind === 'class' ? e.cls : `${e.cls}.${e.name}`] ?? []
+        const viaAlt = !own && alts.some(alt => kept.some(c => c.chapter === alt && c.text.includes(e.kind === 'class' ? e.cls : e.name)))
+        if (own || viaAlt) pass++
         else console.log(`  MISS [${e.kind}] ${e.cls}.${e.name} → kept: ${kept.map(c => c.chapter).join(' | ') || '(refused)'}`)
+        if (viaAlt && verbose) console.log(`  ALT  [${e.kind}] ${e.cls}.${e.name} → accepted via ${alts.join(', ')}`)
     }
     console.log(`end-to-end: ${pass}/${rerankSample} pass`)
 }
