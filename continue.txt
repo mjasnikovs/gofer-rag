@@ -1,0 +1,51 @@
+Let's continue improving gofer's retrieval quality (state documented in memory
+under gofer-rag-architecture; commit ad26f39 "feat: LLM query expansion for
+casual paraphrases (18/22 -> 21/22)").
+
+Current state (all measured, 2026-07-13): hybrid retrieval (vector 20 ∪ BM25 10
+∪ titleSearch 8+4) + LLM query expansion — title-less questions get a Godot
+term list from the 27B, appended to search text AND rerank query
+(retrieveDetailed() in src/core/query.ts is the single production path;
+expandQuery in src/ai/llm.ts rejects non-term-list replies, which protects the
+refusal gate). All evals green: eval-retrieval 10/10, eval-paraphrase 21/22
+(pool 22/22, RERANK_MIN 20), eval-coverage 100% / --lowercase 97.6%, llm-gate
+2/2, --rerank 100 end-to-end 87/100 (13 misses all defensible-sibling).
+Context pollution resolved by expanded rerank; relative cutoff rejected
+against diag-gap.ts data.
+
+Next fixes, in priority order — measure, don't guess:
+
+1. Last paraphrase miss: "which object is under the mouse cursor" —
+   Ray-casting reaches the pool but loses the rerank: the 27B expands toward
+   Input/Control and emits the Godot-3 name Physics2DDirectSpaceState.
+   Lever: nudge EXPAND_PROMPT toward Godot-4 naming (e.g. "use Godot 4 class
+   names, not Godot 3") and/or physics picking vocabulary. Expansion feeds the
+   rerank query now, so ANY prompt change moves kept sets for all 22 —
+   rerun eval-paraphrase AND eval-retrieval (refusals!) after each wording try.
+   Cheap to iterate: ~13 min per full pair.
+
+2. e2e misses that keep defensible chapters (13/100): reranker prefers
+   topical/sibling chapters (Expression → "Evaluating expressions", Font →
+   "Using Fonts", PhysicalBoneSimulator3D → "Ragdoll system"). This looks like
+   an eval-criterion problem, not retrieval: add an accepted-alternatives map
+   to eval-coverage's end-to-end block (entity → extra chapters that count),
+   justify each entry by reading the chapter, and re-measure before touching
+   the pipeline. Target: an honest end-to-end number, not a higher one.
+
+3. Expansion latency polish (only if free): expansion adds ~0.5s per
+   title-less query. If ask.ts feels slow, consider running expandQuery
+   concurrently with the unexpanded embed to hide the round-trip; measure
+   wall-clock before/after, don't restructure on a hunch.
+
+4. Polish (old, still open): legacy Godot-3 names route to the "Upgrading from
+   Godot 3 to Godot 4" chapter → refusal. Defensible; revisit only if free.
+
+Notes: evals need the llama server for the expansion path (docker start
+llama-turboquant, wait for http://localhost:8080/health); without it they
+measure the unexpanded pipeline (paraphrase baseline 18/22). retrieve() /
+retrieveDetailed() test without the answer-writing LLM; bun run scripts/ask.ts
+"..." is the full pipeline. FTS tokenizer: lowercases everything, drops tokens
+>40 chars. Reranker: read the RAW logit; embedder stays fp16 (ONNX q8 is a
+distorted space, don't "optimize"). bun test fails with "0 test files" —
+pre-existing, not broken. Diagnostics: diag-paraphrase-rank.ts (deep vector
+rank scan), diag-gap.ts (kept-set gap distribution).
