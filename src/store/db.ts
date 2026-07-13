@@ -61,14 +61,24 @@ async function chapterList(): Promise<string[]> {
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// Distinctive titles — a digit or two capital humps (Sprite2D, AnimationPlayer)
+// — can't be mistaken for English prose, so they match case-insensitively and
+// lowercase questions ("what is sprite2d used for?") still find their chapter.
+// Single-hump titles are mostly real words (66 of 84 are in the dictionary —
+// Tree, Control, Timer, Range ...) and blanket case-insensitivity pulled them
+// into 7 of 12 natural test sentences AND into every "...property of X control?"
+// eval template (measured 2026-07-13), so those stay case-sensitive.
+const distinctiveTitle = (t: string) => /\d/.test(t) || (t.match(/[A-Z]/g) ?? []).length >= 2
+
 // Chapter titles are Godot symbol names (Sprite2D, AnimationPlayer, ...), so a
 // title appearing verbatim in the question is a direct pointer to its chapter.
 // Corpus-wide BM25 can't follow it — common classes like Sprite2D are mentioned
 // in 169 chunks and the class page ranks ~66th for its own name (measured) —
-// so this searches within just the named chapters instead. Case-sensitive
-// word-boundary match: users who name a class type its exact casing.
+// so this searches within just the named chapters instead.
 export async function titleSearch(question: string, k: number): Promise<StoredChunk[]> {
-    const titles = (await chapterList()).filter(t => new RegExp(`\\b${escapeRegex(t)}\\b`).test(question))
+    const titles = (await chapterList()).filter(t =>
+        new RegExp(`\\b${escapeRegex(t)}\\b`, distinctiveTitle(t) ? 'i' : '').test(question)
+    )
     if (titles.length === 0) return []
     // Longest titles are the most specific mentions; cap so a title-heavy
     // question can't flood the reranker.
@@ -86,13 +96,13 @@ export async function titleSearch(question: string, k: number): Promise<StoredCh
     // Optional leading underscore: virtual methods are _named_like_this.
     const symbols = question.match(/\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? []
     const symbolHits =
-        symbols.length === 0
-            ? []
-            : ((await table
-                  .query()
-                  .where(`${where} AND (${symbols.map(s => `text LIKE '%${s}%'`).join(' OR ')})`)
-                  .limit(4)
-                  .toArray()) as StoredChunk[])
+        symbols.length === 0 ?
+            []
+        :   ((await table
+                .query()
+                .where(`${where} AND (${symbols.map(s => `text LIKE '%${s}%'`).join(' OR ')})`)
+                .limit(4)
+                .toArray()) as StoredChunk[])
 
     // FTS can come up empty even for a named chapter: the tokenizer never
     // indexes tokens over 40 chars (VisualShaderNodeTextureParameterTriplanar

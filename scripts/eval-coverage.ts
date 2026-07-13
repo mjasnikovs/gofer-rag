@@ -13,6 +13,7 @@
 //   bun run scripts/eval-coverage.ts                      # all classes + 1000-member sample
 //   bun run scripts/eval-coverage.ts --members all        # full 27k member sweep (~1h)
 //   bun run scripts/eval-coverage.ts --rerank 25          # + end-to-end retrieve() on 25 samples
+//   bun run scripts/eval-coverage.ts --lowercase          # class names typed lowercase ("sprite2d")
 //
 // PASS (candidate stage) = the hybrid candidate pool (vector vectorTopK ∪ FTS
 // ftsTopK, exactly what retrieve() reranks) contains a chunk from the entity's
@@ -37,6 +38,11 @@ const argOf = (flag: string) => {
 }
 const memberArg = argOf('--members') ?? '1000'
 const rerankSample = Number(argOf('--rerank') ?? 0)
+// --lowercase: type class names the way a casual user does ("sprite2d").
+// Exercises the case-insensitive branch of titleSearch; single-English-word
+// classes (Control, Timer, ...) are expected casualties — they stay
+// case-sensitive by design (see distinctiveTitle in src/store/db.ts).
+const lowercase = argv.includes('--lowercase')
 
 // Deterministic RNG so a rerun samples the same entities.
 function mulberry32(seed: number) {
@@ -75,29 +81,30 @@ for (const r of rows) {
 //   bool exclude_parent = true                → property
 //   RESOLVER_MAX_QUERIES = 256                → constant
 function parseMember(line: string): {kind: Kind; name: string} | null {
-    const method = line.match(/^(?:[\w\[\].]+\s+)(\w+)\s*\(/)
+    const method = line.match(/^(?:[\w[\].]+\s+)(\w+)\s*\(/)
     if (method) return {kind: 'method', name: method[1]!}
     const signal = line.match(/^(\w+)\s*\(/)
     if (signal) return {kind: 'signal', name: signal[1]!}
     const constant = line.match(/^([A-Z][A-Z0-9_]+)\s*=/)
     if (constant) return {kind: 'constant', name: constant[1]!}
-    const property = line.match(/^[\w\[\].]+\s+(\w+)(?:\s*=.*)?$/)
+    const property = line.match(/^[\w[\].]+\s+(\w+)(?:\s*=.*)?$/)
     if (property) return {kind: 'property', name: property[1]!}
     return null
 }
 
 const question = (e: {kind: Kind; cls: string; name: string}): string => {
+    const cls = lowercase ? e.cls.toLowerCase() : e.cls
     switch (e.kind) {
         case 'class':
-            return `What is ${e.cls} used for in Godot?`
+            return `What is ${cls} used for in Godot?`
         case 'method':
-            return `What does the ${e.name}() method of ${e.cls} do?`
+            return `What does the ${e.name}() method of ${cls} do?`
         case 'signal':
-            return `When is the ${e.name} signal of ${e.cls} emitted?`
+            return `When is the ${e.name} signal of ${cls} emitted?`
         case 'property':
-            return `What does the ${e.name} property of ${e.cls} control?`
+            return `What does the ${e.name} property of ${cls} control?`
         case 'constant':
-            return `What is the ${e.name} constant of ${e.cls}?`
+            return `What is the ${e.name} constant of ${cls}?`
     }
 }
 

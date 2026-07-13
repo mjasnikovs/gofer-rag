@@ -57,7 +57,15 @@ export const config = {
     ftsTopK: 10, // rough candidates pulled by BM25 full-text match
     titleTopK: 8, // candidates from chapters whose title (= class name) appears in the question
     rerankKeep: 5, // how many survive reranking and reach the LLM
-    rerankThreshold: 0, // raw reranker logit cutoff — below this we answer "not found"
+    // Raw reranker logit cutoff — below this we answer "not found" without
+    // calling the LLM. Measured margins (2026-07-13, scripts/eval-paraphrase.ts
+    // questions): off-topic questions peak at -6.25 (FIFA) / -7.94 (sourdough),
+    // while answerable how-tos phrased without symbols need as low as -2.85
+    // ("Using SceneTree" for the level-switch question) — a threshold of 0
+    // refused 5 of them. -4 sits in the gap with ~2 logits of margin each way.
+    // Plausible-but-fake questions (hallucination bait) score ~-0.15 and can't
+    // be caught by ANY threshold; the LLM refusal gate is the defense there.
+    rerankThreshold: -4,
 
     // the single refusal sentence — the LLM is told to emit it verbatim when the
     // context doesn't answer the question, and we detect it to return found:false

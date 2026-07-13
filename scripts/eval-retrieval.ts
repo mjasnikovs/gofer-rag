@@ -14,7 +14,6 @@ import {embedQuery, loadEmbedder} from '../src/ai/embedder'
 import {rerank, loadReranker} from '../src/ai/reranker'
 import {loadTable, vectorSearch, ftsSearch, titleSearch} from '../src/store/db'
 import {config} from '../src/config'
-import type {StoredChunk} from '../src/types'
 
 type Case = {question: string; expect?: RegExp} // no expect = must refuse
 
@@ -45,7 +44,7 @@ await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
 const modes = [
     {
         name: 'vector-only',
-        candidates: async (q: string, vector: number[]) => vectorSearch(vector, config.vectorTopK)
+        candidates: async (_q: string, vector: number[]) => vectorSearch(vector, config.vectorTopK)
     },
     {
         name: 'hybrid',
@@ -67,7 +66,7 @@ for (const c of cases) {
     const vector = await embedQuery(c.question)
     const row: CellResult[] = []
     for (const mode of modes) {
-        const pool = (await mode.candidates(c.question, vector)) as StoredChunk[]
+        const pool = (await mode.candidates(c.question, vector))
         const inPool = c.expect ? pool.some(x => c.expect!.test(x.chapter)) : undefined
         const t0 = performance.now()
         const scores = await rerank(
