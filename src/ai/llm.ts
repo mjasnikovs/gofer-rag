@@ -31,11 +31,22 @@ const SYSTEM_PROMPT = [
 // titleSearch have nothing to grab. The 27B lists the Godot class names and doc
 // topics the question is really about; those terms give every candidate source
 // traction — they are often chapter titles themselves (Tween, CanvasLayer).
-// Measured on the 22-question paraphrase set: pool hits 18 → 22, ~0.5s/query.
+// Measured on the 22-question paraphrase set: pool hits 18 → 21, ~0.5s/query.
+//
+// The Godot-4-naming line stops the model emitting Godot 3 class names
+// (Physics2DDirectSpaceState etc.), which only match the "Upgrading from
+// Godot 3" chapter and trigger refusals. It does NOT fix the one remaining
+// miss ("object under the mouse cursor"): the 27B reads that as a UI/Control
+// question, not physics picking, in every prompt wording tried (six variants,
+// 2026-07-13) — an interpretation problem, not a naming one. Wordings that
+// pushed harder ("implement the answer", subsystem coverage, game-dev
+// perspective, docs-page vocabulary) all collapsed other useful terms or
+// locked in the UI reading; keep this prompt minimal.
 const EXPAND_PROMPT = [
     'You are a Godot 4 engine expert.',
     'Given a question, list the Godot class names and documentation topic keywords most useful for finding the answer in the official docs.',
     'Reply with ONLY a comma-separated list of 3 to 8 terms. Use exact Godot spelling and capitalization (e.g. CharacterBody2D, Tween, CanvasLayer).',
+    'Use the current Godot 4 class names, never the old Godot 3 names (e.g. Node3D not Spatial, AnimatedSprite2D not AnimatedSprite).',
     'If the question is unrelated to Godot or game development, reply with exactly NONE.',
     'No explanations. /no_think'
 ].join(' ')
