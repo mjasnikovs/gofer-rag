@@ -27,8 +27,10 @@ async function load(): Promise<{tokenizer: PreTrainedTokenizer; model: PreTraine
     return {tokenizer, model}
 }
 
-// Warm the model so the first real request isn't slow.
+// Warm the model so the first real request isn't slow. When a rerank box is
+// configured the ONNX model is never used — don't load it.
 export async function loadReranker(): Promise<void> {
+    if (config.rerankUrl) return
     await load()
 }
 
@@ -36,9 +38,30 @@ type SequenceClassifierOutput = {
     logits: {tolist(): number[][]}
 }
 
+type RerankBoxResponse = {
+    results: {index: number; relevance_score: number}[]
+}
+
+// llama.cpp /v1/rerank with the same model (Q8_0 GGUF). relevance_score is the
+// raw classifier logit, same scale as the ONNX path — validated pairwise by
+// scripts/validate-llamacpp-rerank.ts before the -4 threshold was trusted here.
+async function rerankViaBox(query: string, passages: string[]): Promise<number[]> {
+    const res = await fetch(`${config.rerankUrl}/v1/rerank`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query, documents: passages, top_n: passages.length})
+    })
+    if (!res.ok) throw new Error(`rerank box request failed: ${res.status} ${await res.text()}`)
+    const data = (await res.json()) as RerankBoxResponse
+    const scores = new Array<number>(passages.length)
+    for (const r of data.results) scores[r.index] = r.relevance_score
+    return scores
+}
+
 // Returns one relevance logit per passage, in the same order as the input.
 export async function rerank(query: string, passages: string[]): Promise<number[]> {
     if (passages.length === 0) return []
+    if (config.rerankUrl) return rerankViaBox(query, passages)
     const {tokenizer: tok, model: mdl} = await load()
     const inputs = tok(new Array<string>(passages.length).fill(query), {
         text_pair: passages,

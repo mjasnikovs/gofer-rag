@@ -41,6 +41,19 @@ export const config = {
     embedImageCpu: 'ghcr.io/ggml-org/llama.cpp:server',
     embedPort: 8091,
 
+    // reranker box (evals): the same stock llama.cpp image serving the reranker
+    // GGUF via /v1/rerank. Serving stays in-process ONNX on CPU; the eval
+    // launcher (scripts/rerank-box.ts) sets RAG_RERANK_URL so test runs use the
+    // box instead — the in-process CPU rerank dominates eval time (~20s/query,
+    // measured 2026-07-13, scripts/diag-timing.ts).
+    rerankGgufPath: '.models/gguf/bge-reranker-v2-m3-Q8_0.gguf',
+    rerankGgufUrl: 'https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q8_0.gguf',
+    rerankPort: 8092,
+    // When set, rerank() POSTs to this llama.cpp server instead of running ONNX
+    // in-process. Scores were validated against the ONNX q8 logits the -4
+    // threshold was calibrated on (scripts/validate-llamacpp-rerank.ts).
+    rerankUrl: process.env.RAG_RERANK_URL ?? '',
+
     // chunking — chars, not tokens (~4 chars per token → ~450 tokens / ~60 overlap)
     chunkChars: 1800,
     overlapChars: 240,

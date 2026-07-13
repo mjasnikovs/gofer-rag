@@ -112,7 +112,11 @@ const started = sh([
     '--rm',
     '--name',
     BOX,
-    ...(gpu ? ['--gpus', 'all', '-e', `CUDA_VISIBLE_DEVICES=${gpu.order}`] : []),
+    // PCI_BUS_ID is load-bearing: CUDA's default enumeration is fastest-first,
+    // so without it CUDA_VISIBLE_DEVICES picks the WRONG card (measured
+    // 2026-07-13 on the rerank box: it landed on the busy 5070 Ti instead of
+    // the idle 3070 Ti and squeezed it to 22 MiB free).
+    ...(gpu ? ['--gpus', 'all', '-e', 'CUDA_DEVICE_ORDER=PCI_BUS_ID', '-e', `CUDA_VISIBLE_DEVICES=${gpu.order}`] : []),
     '-v',
     `${resolve(ggufPath, '..')}:/models:ro`,
     '-p',

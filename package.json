@@ -16,7 +16,8 @@
     "eval:paraphrase": "bun run scripts/eval-paraphrase.ts",
     "eval:coverage": "bun run scripts/eval-coverage.ts",
     "eval:coverage:lowercase": "bun run scripts/eval-coverage.ts --lowercase",
-    "test": "bun run eval:retrieval && bun run eval:paraphrase && bun run eval:coverage && bun run eval:coverage:lowercase",
+    "test": "bun run scripts/rerank-box.ts bun run test:evals",
+    "test:evals": "bun run eval:retrieval && bun run eval:paraphrase && bun run eval:coverage && bun run eval:coverage:lowercase",
     "test:llm": "bun run scripts/eval-llm-gate.ts"
   },
   "dependencies": {
