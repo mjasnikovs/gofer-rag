@@ -12,11 +12,14 @@ async function connect(): Promise<lancedb.Connection> {
 }
 
 // Drop any existing table and recreate it from the given rows (fresh ingest).
+// The FTS index makes exact-token lookups (class names like NavigationAgent2D)
+// findable even when embedding similarity misses them entirely.
 export async function recreateTable(rows: StoredChunk[]): Promise<void> {
     const db = await connect()
     const names = await db.tableNames()
     if (names.includes(config.table)) await db.dropTable(config.table)
-    await db.createTable(config.table, rows)
+    const table = await db.createTable(config.table, rows)
+    await table.createIndex('text', {config: lancedb.Index.fts()})
     cachedTable = null
 }
 
@@ -36,4 +39,67 @@ export async function vectorSearch(vector: number[], k: number): Promise<StoredC
     const table = await getTable()
     const results = await table.search(vector).limit(k).toArray()
     return results as StoredChunk[]
+}
+
+// BM25 full-text candidates. LanceDB tokenizes the question itself, so the raw
+// text goes in as-is; a question with no indexed tokens just returns [].
+export async function ftsSearch(text: string, k: number): Promise<StoredChunk[]> {
+    const table = await getTable()
+    const results = await table.search(text, 'fts').limit(k).toArray()
+    return results as StoredChunk[]
+}
+
+let cachedChapters: string[] | null = null
+async function chapterList(): Promise<string[]> {
+    if (!cachedChapters) {
+        const table = await getTable()
+        const rows = (await table.query().select(['chapter']).toArray()) as {chapter: string}[]
+        cachedChapters = [...new Set(rows.map(r => r.chapter))]
+    }
+    return cachedChapters
+}
+
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+// Chapter titles are Godot symbol names (Sprite2D, AnimationPlayer, ...), so a
+// title appearing verbatim in the question is a direct pointer to its chapter.
+// Corpus-wide BM25 can't follow it — common classes like Sprite2D are mentioned
+// in 169 chunks and the class page ranks ~66th for its own name (measured) —
+// so this searches within just the named chapters instead. Case-sensitive
+// word-boundary match: users who name a class type its exact casing.
+export async function titleSearch(question: string, k: number): Promise<StoredChunk[]> {
+    const titles = (await chapterList()).filter(t => new RegExp(`\\b${escapeRegex(t)}\\b`).test(question))
+    if (titles.length === 0) return []
+    // Longest titles are the most specific mentions; cap so a title-heavy
+    // question can't flood the reranker.
+    const named = titles.sort((a, b) => b.length - a.length).slice(0, 3)
+    const where = `chapter IN (${named.map(t => `'${t.replace(/'/g, "''")}'`).join(', ')})`
+    const table = await getTable()
+    const ftsHits = (await table.search(question, 'fts').where(where).limit(k).toArray()) as StoredChunk[]
+
+    // Symbol lookup: snake_case / ALL_CAPS tokens in the question are member
+    // names (Godot's uniform naming), and within the named chapters a chunk
+    // containing one verbatim is near-certainly the target. Within-chapter BM25
+    // alone misses these in huge classes (RenderingServer, Node, TextEdit):
+    // member names tokenize into common words like "get". Only [a-z0-9_]
+    // tokens reach the LIKE clause, so interpolation is safe.
+    // Optional leading underscore: virtual methods are _named_like_this.
+    const symbols = question.match(/\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? []
+    const symbolHits =
+        symbols.length === 0
+            ? []
+            : ((await table
+                  .query()
+                  .where(`${where} AND (${symbols.map(s => `text LIKE '%${s}%'`).join(' OR ')})`)
+                  .limit(4)
+                  .toArray()) as StoredChunk[])
+
+    // FTS can come up empty even for a named chapter: the tokenizer never
+    // indexes tokens over 40 chars (VisualShaderNodeTextureParameterTriplanar
+    // is 41 — measured 0 corpus-wide FTS hits), and a short chapter may share
+    // no other indexed token with the question. The chapter was still named
+    // explicitly, so fall back to its chunks directly; the reranker judges.
+    const plain = ftsHits.length >= k ? [] : ((await table.query().where(where).limit(k).toArray()) as StoredChunk[])
+
+    return [...new Map([...ftsHits, ...symbolHits, ...plain].map(c => [c.id, c])).values()].slice(0, k + 4)
 }

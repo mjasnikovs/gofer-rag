@@ -45,8 +45,17 @@ export const config = {
     chunkChars: 1800,
     overlapChars: 240,
 
-    // retrieval pipeline
-    vectorTopK: 20, // rough candidates pulled from LanceDB
+    // retrieval pipeline — hybrid: vector candidates catch paraphrases, BM25
+    // full-text candidates catch exact tokens (class names like NavigationAgent2D,
+    // which embedding similarity can miss entirely — measured: not in vector
+    // top 100 for "What is a NavigationAgent2D used for?"). The union goes to
+    // the reranker, which is the sole judge of relevance.
+    vectorTopK: 20, // rough candidates pulled from LanceDB by embedding similarity
+    // 10 BM25 candidates: every FTS-rescued chapter in the eval set ranks ≤5,
+    // and each extra 10 candidates costs ~7s of CPU rerank per query
+    // (measured 2026-07-13, scripts/eval-retrieval.ts).
+    ftsTopK: 10, // rough candidates pulled by BM25 full-text match
+    titleTopK: 8, // candidates from chapters whose title (= class name) appears in the question
     rerankKeep: 5, // how many survive reranking and reach the LLM
     rerankThreshold: 0, // raw reranker logit cutoff — below this we answer "not found"
 

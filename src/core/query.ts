@@ -2,7 +2,7 @@
 //
 //   question
 //     → embed (query mode)
-//     → LanceDB: top-K rough candidates
+//     → LanceDB: top-K vector candidates ∪ top-K BM25 full-text candidates
 //     → reranker judges them, sort by score
 //     → GATE: best score below threshold → "not found" (no LLM, cannot guess)
 //     → keep top-N above threshold → LLM writes a grounded, cited answer
@@ -10,7 +10,7 @@
 import {embedQuery, loadEmbedder} from '../ai/embedder'
 import {rerank, loadReranker} from '../ai/reranker'
 import {generateAnswer} from '../ai/llm'
-import {loadTable, vectorSearch} from '../store/db'
+import {loadTable, vectorSearch, ftsSearch, titleSearch} from '../store/db'
 import {config} from '../config'
 import type {QueryResult, RankedChunk} from '../types'
 
@@ -28,9 +28,18 @@ export async function warmup(): Promise<void> {
 }
 
 // Retrieve + rerank, keeping only passages above the relevance threshold.
+// Three candidate sources, each catching what the others miss: vector search
+// for paraphrases, corpus-wide BM25 for rare exact tokens, and title match for
+// class names too common for BM25. Merged (deduped by chunk id), then reranked.
 export async function retrieve(question: string): Promise<RankedChunk[]> {
     const vector = await embedQuery(question)
-    const candidates = await vectorSearch(vector, config.vectorTopK)
+    const [vectorHits, ftsHits, titleHits] = await Promise.all([
+        vectorSearch(vector, config.vectorTopK),
+        ftsSearch(question, config.ftsTopK),
+        titleSearch(question, config.titleTopK)
+    ])
+    const byId = new Map(vectorHits.concat(ftsHits, titleHits).map(c => [c.id, c]))
+    const candidates = [...byId.values()]
     if (candidates.length === 0) return []
     const scores = await rerank(
         question,
