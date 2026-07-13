@@ -1,8 +1,9 @@
 // Retrieval eval: does the right chapter survive rerank, and do off-topic
 // questions still get refused? Compares the old vector-only pipeline against
-// the hybrid (vector ∪ BM25) one so tuning is measured, not guessed. No LLM
-// involved — this exercises embed → candidates → rerank → threshold, the same
-// logic as retrieve().
+// the hybrid one so tuning is measured, not guessed. Exercises
+// candidates (incl. LLM query expansion for title-less questions — wants the
+// llama.cpp server up) → rerank → threshold, the same logic as retrieve(); the
+// answer-writing LLM call is not involved.
 //
 //   bun run scripts/eval-retrieval.ts             quiet: one summary line, exit 1 on fail
 //   bun run scripts/eval-retrieval.ts --verbose   full per-question table + timings
@@ -19,8 +20,10 @@
 
 import {embedQuery, loadEmbedder} from '../src/ai/embedder'
 import {rerank, loadReranker} from '../src/ai/reranker'
-import {loadTable, vectorSearch, ftsSearch, titleSearch} from '../src/store/db'
+import {retrieveDetailed} from '../src/core/query'
+import {loadTable, vectorSearch} from '../src/store/db'
 import {config} from '../src/config'
+import type {RankedChunk, StoredChunk} from '../src/types'
 
 type Case = {question: string; expect?: RegExp} // no expect = must refuse
 
@@ -52,23 +55,33 @@ const HYBRID_MIN = cases.length
 if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
 
-// Both modes share the production rerank/threshold/keep logic; they differ only
-// in how the candidate pool is built. "hybrid" is what retrieve() does and is
-// the verdict; "vector-only" is the reference the pipeline graduated from, run
-// only under --compare.
+// "hybrid" IS retrieveDetailed() — the production pipeline including LLM query
+// expansion — and is the verdict; "vector-only" is the reference the pipeline
+// graduated from (original-question rerank, same threshold/keep), run only
+// under --compare.
+type ModeRun = {pool: StoredChunk[]; kept: RankedChunk[]}
 const vectorOnly = {
     name: 'vector-only',
-    candidates: async (_q: string, vector: number[]) => vectorSearch(vector, config.vectorTopK)
+    run: async (q: string): Promise<ModeRun> => {
+        const vector = await embedQuery(q)
+        const pool = await vectorSearch(vector, config.vectorTopK)
+        const scores = await rerank(
+            q,
+            pool.map(x => x.text)
+        )
+        const kept = pool
+            .map((cand, i) => ({...cand, score: scores[i]!}))
+            .sort((a, b) => b.score - a.score)
+            .filter(x => x.score >= config.rerankThreshold)
+            .slice(0, config.rerankKeep)
+        return {pool, kept}
+    }
 }
 const hybrid = {
     name: 'hybrid',
-    candidates: async (q: string, vector: number[]) => {
-        const [vec, fts, titles] = await Promise.all([
-            vectorSearch(vector, config.vectorTopK),
-            ftsSearch(q, config.ftsTopK),
-            titleSearch(q, config.titleTopK)
-        ])
-        return [...new Map(vec.concat(fts, titles).map(c => [c.id, c])).values()]
+    run: async (q: string): Promise<ModeRun> => {
+        const {candidates, kept} = await retrieveDetailed(q)
+        return {pool: candidates, kept}
     }
 }
 const modes = compare ? [vectorOnly, hybrid] : [hybrid]
@@ -77,22 +90,12 @@ type CellResult = {pass: boolean; ms: number; pool: number; kept: string[]}
 const results = new Map<string, CellResult[]>() // question → one cell per mode
 
 for (const c of cases) {
-    const vector = await embedQuery(c.question)
     const row: CellResult[] = []
     for (const mode of modes) {
-        const pool = (await mode.candidates(c.question, vector))
-        const inPool = c.expect ? pool.some(x => c.expect!.test(x.chapter)) : undefined
         const t0 = performance.now()
-        const scores = await rerank(
-            c.question,
-            pool.map(x => x.text)
-        )
+        const {pool, kept} = await mode.run(c.question)
         const ms = performance.now() - t0
-        const kept = pool
-            .map((cand, i) => ({...cand, score: scores[i]!}))
-            .sort((a, b) => b.score - a.score)
-            .filter(x => x.score >= config.rerankThreshold)
-            .slice(0, config.rerankKeep)
+        const inPool = c.expect ? pool.some(x => c.expect!.test(x.chapter)) : undefined
         const pass = c.expect ? kept.some(x => c.expect!.test(x.chapter)) : kept.length === 0
         row.push({pass, ms, pool: pool.length, kept: kept.map(x => `${x.score.toFixed(2)} ${x.chapter}`)})
         // Detail only for real failures: the hybrid verdict always, the
@@ -120,7 +123,7 @@ if (verbose) {
         const passes = rows.filter(r => r.pass).length
         const meanMs = rows.reduce((s, r) => s + r.ms, 0) / rows.length
         const maxMs = Math.max(...rows.map(r => r.ms))
-        console.log(`${mode.name.padEnd(12)} ${passes}/${cases.length} pass   rerank mean ${(meanMs / 1000).toFixed(1)}s  max ${(maxMs / 1000).toFixed(1)}s`)
+        console.log(`${mode.name.padEnd(12)} ${passes}/${cases.length} pass   retrieve mean ${(meanMs / 1000).toFixed(1)}s  max ${(maxMs / 1000).toFixed(1)}s`)
     }
 }
 

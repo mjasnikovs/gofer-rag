@@ -70,15 +70,22 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // eval template (measured 2026-07-13), so those stay case-sensitive.
 const distinctiveTitle = (t: string) => /\d/.test(t) || (t.match(/[A-Z]/g) ?? []).length >= 2
 
+// Chapter titles that appear verbatim in the question. Also the pipeline's
+// "does this question name a Godot symbol?" test: no match means casual
+// phrasing, which is when retrieve() reaches for LLM query expansion.
+export async function matchedTitles(question: string): Promise<string[]> {
+    return (await chapterList()).filter(t =>
+        new RegExp(`\\b${escapeRegex(t)}\\b`, distinctiveTitle(t) ? 'i' : '').test(question)
+    )
+}
+
 // Chapter titles are Godot symbol names (Sprite2D, AnimationPlayer, ...), so a
 // title appearing verbatim in the question is a direct pointer to its chapter.
 // Corpus-wide BM25 can't follow it — common classes like Sprite2D are mentioned
 // in 169 chunks and the class page ranks ~66th for its own name (measured) —
 // so this searches within just the named chapters instead.
 export async function titleSearch(question: string, k: number): Promise<StoredChunk[]> {
-    const titles = (await chapterList()).filter(t =>
-        new RegExp(`\\b${escapeRegex(t)}\\b`, distinctiveTitle(t) ? 'i' : '').test(question)
-    )
+    const titles = await matchedTitles(question)
     if (titles.length === 0) return []
     // Longest titles are the most specific mentions; cap so a title-heavy
     // question can't flood the reranker.

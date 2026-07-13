@@ -15,12 +15,9 @@ const verbose = argv.includes('--verbose')
 
 // llmBaseUrl is ".../v1"; the llama.cpp health endpoint is its sibling.
 const healthUrl = config.llmBaseUrl.replace(/\/v1\/?$/, '') + '/health'
-let up = false
-try {
-    up = (await fetch(healthUrl, {signal: AbortSignal.timeout(2000)})).ok
-} catch {
-    up = false
-}
+const up = await fetch(healthUrl, {signal: AbortSignal.timeout(2000)})
+    .then(r => r.ok)
+    .catch(() => false)
 if (!up) {
     console.log(`llm-gate: SKIP  (no server at ${healthUrl})`)
     process.exit(0)

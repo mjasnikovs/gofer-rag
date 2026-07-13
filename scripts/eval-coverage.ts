@@ -147,6 +147,10 @@ if (verbose) console.log(`testing ${testSet.length} entities (members: ${memberA
 if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadTable(), rerankSample > 0 ? loadReranker() : Promise.resolve()])
 
+// Deliberately WITHOUT LLM query expansion (unlike production gatherCandidates):
+// templated questions name the class, so production skips expansion for them
+// anyway, and staying LLM-free keeps the exhaustive sweep at ~0.12s/query.
+// The --rerank block goes through retrieve() and does include expansion.
 async function candidatePool(q: string): Promise<StoredChunk[]> {
     const vector = await embedQuery(q)
     const [vec, fts, titles] = await Promise.all([
@@ -205,8 +209,8 @@ if (rerankSample > 0) {
     let pass = 0
     for (const e of sample(testSet, rerankSample)) {
         const kept = await retrieve(e.question)
-        const ok = e.kind === 'class' ? kept.some(c => c.chapter === e.cls) : kept.some(c => c.chapter === e.cls && c.text.includes(e.name))
-        if (ok) pass++
+        const hit = e.kind === 'class' ? kept.some(c => c.chapter === e.cls) : kept.some(c => c.chapter === e.cls && c.text.includes(e.name))
+        if (hit) pass++
         else console.log(`  MISS [${e.kind}] ${e.cls}.${e.name} → kept: ${kept.map(c => c.chapter).join(' | ') || '(refused)'}`)
     }
     console.log(`end-to-end: ${pass}/${rerankSample} pass`)
