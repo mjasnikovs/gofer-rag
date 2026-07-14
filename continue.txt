@@ -1,69 +1,61 @@
 Let's continue improving gofer (state documented in memory under
-gofer-rag-architecture; latest commits 454e1b0 "Godot-4-only naming in
-expansion prompt", 3728128 "accepted-alternatives map (87 -> 95/100)").
+gofer-rag-architecture; latest work: title pin in retrieveDetailed,
+e2e 95 -> 98/100).
 
-Current state (all measured, 2026-07-13, fourth session): hybrid retrieval +
-LLM query expansion, all evals green — eval-retrieval 10/10, eval-paraphrase
-21/22 (RERANK_MIN 20), eval-coverage 100% / --lowercase 97.6%, llm-gate 2/2,
-end-to-end --rerank 100 = 95/100 via the justified ACCEPTED_ALTERNATIVES map
-in eval-coverage.ts (5 remaining misses examined and deliberately kept as
-honest misses — see the map's comment). `bun run test` wraps the eval chain
-in the GPU rerank box (~5 min); run it bare and you pay ~20s/query.
+Current state (all measured, 2026-07-14, fifth session): hybrid retrieval +
+LLM query expansion + title pin, all evals green — eval-retrieval 10/10,
+eval-paraphrase 22/22 this run (21 is normal, RERANK_MIN 20), eval-coverage
+100% / --lowercase 97.6%, llm-gate 2/2, end-to-end --rerank 100 = 98/100.
+The pin: when the ORIGINAL question names a chapter title verbatim and none
+of that chapter's chunks made the top-5 kept set, append its best
+above-threshold chunk (symbol-token-bearing preferred; symbolTokens now a
+shared db.ts helper). Verified on BOTH rerank backends via
+scripts/diag-miss-shape.ts. `bun run test` wraps the eval chain in the GPU
+rerank box (~5 min); bare costs ~20s/query.
 
-Closed this session — don't reopen without new evidence:
-- Paraphrase miss "which object is under the mouse cursor" is
-  INTERPRETATION-BOUND: six EXPAND_PROMPT wordings tried, the 27B reads the
-  question as UI/Control in every one, pushier wordings made other terms
-  collapse. The kept Godot-4-only-naming line is the one that survived
-  (stops Physics2DDirectSpaceState-style Godot-3 names). Further progress
-  needs a non-prompt lever, not wording try #7.
-- e2e criterion: alternatives map requires the kept chunk to NAME the
-  entity; BoxMesh/Curve/Tree.font/CollisionObject3D/ScriptLanguageExtension
-  ._get_recognized_extensions stay misses on purpose (read the chapters —
-  they don't answer).
+Closed — don't reopen without new evidence:
+- The 2 remaining e2e misses are OUT OF PIN REACH (diag-miss-shape.ts has
+  the numbers): Curve's own chunks score below the -4 gate (best -4.6), and
+  Tree.font's "font" has no symbol shape so the pin takes a non-font Tree
+  chunk — same single-word-member gap as TextEdit.language. Fixing either
+  means overriding the threshold or word-matching heuristics that overfit
+  the eval template. 98/100 is the honest ceiling of this design.
+- Paraphrase "which object is under the mouse cursor" is
+  INTERPRETATION-BOUND (six EXPAND_PROMPT wordings tried, fourth session);
+  it happened to pass this run — expansion is nondeterministic, don't read
+  anything into single-run flips either way.
 
 Next candidates, in rough priority — measure, don't guess:
 
-1. The 5 honest e2e misses are now real retrieval targets. BoxMesh is
-   DIAGNOSED (2026-07-13, in-process ONNX scores): its own page is in the
-   pool and scores -1.75 — above the -4 gate — but ranks 6th and rerankKeep
-   is 5. Every kept chunk MENTIONS BoxMesh in a tutorial context ("Add a
-   BoxMesh" in Using SoftBody3D, +1.76) and the cross-encoder rates that
-   over the terse reference page that opens with "Inherits:". Candidate
-   lever to evaluate: when the question verbatim-names a chapter title
-   (titleSearch fired), pin that chapter's best above-threshold chunk into
-   the kept set. Check the other 4 misses fit the same shape first, and
-   re-run the whole suite — the pin must not dilute paraphrase answers.
-
-2. Expansion latency polish (only if free): expansion adds ~0.5s per
+1. Expansion latency polish (only if free): expansion adds ~0.5s per
    title-less query in ask.ts. Could overlap expandQuery with the
    unexpanded-question embed only if you restructure gatherCandidates;
    measure wall-clock first (scripts/diag-timing.ts) — don't restructure on
    a hunch.
 
-3. Old polish, still open: legacy Godot-3 names in USER questions route to
+2. Old polish, still open: legacy Godot-3 names in USER questions route to
    the "Upgrading from Godot 3 to Godot 4" chapter → refusal. Defensible;
-   revisit only if free. (Expansion no longer EMITS Godot-3 names — that
-   half is fixed.)
+   revisit only if free. (Expansion no longer EMITS Godot-3 names.)
 
-Measurement caveats (all bit or nearly bit the fourth session):
-- e2e --rerank 100 is noisy ±1: the "87/100 baseline" measured 88 on a
-  clean re-run with no relevant change. Treat 94-96 as "still 95"; only
-  investigate a drop of 2+.
+3. If nothing else: answer-quality passes (ask.ts outputs), serve.ts/API
+   polish, or a fresh eval axis (e.g. multi-class questions naming 2+
+   titles — the pin caps at 3, nobody has measured that path).
+
+Measurement caveats (all bit or nearly bit earlier sessions):
+- e2e --rerank 100 is noisy ±1: treat 97-99 as "still 98"; only investigate
+  a drop of 2+.
 - Evals rerank through the GPU box (GGUF Q8_0); SERVING uses in-process
-  ONNX q8. Logits differ (mean |Δ| 0.34, max 2.3, flips near -4) — rank-5
-  -vs-6 questions like the BoxMesh pin sit exactly where the backends can
-  disagree, so confirm any pin/threshold conclusion on BOTH backends.
-- Expansion is nondeterministic run to run even at temperature 0 (cause
-  unknown — server-side state?). Probe 3-4x before believing a term list;
-  single-run prompt-wording verdicts are weak evidence.
+  ONNX q8. Logits differ (mean |Δ| 0.34, max 2.3, flips near -4 and at
+  rank-5-vs-6 boundaries — CollisionObject3D flipped exactly there before
+  the pin). Confirm pin/threshold conclusions on BOTH backends
+  (diag-miss-shape.ts runs either).
+- Expansion is nondeterministic run to run even at temperature 0. Probe
+  3-4x before believing a term list; single-run verdicts are weak evidence.
 - eval-coverage's e2e sample shares the seeded RNG with the member sample:
   a different --members value silently changes WHICH 100 entities e2e
   tests. Numbers are only comparable across runs with identical flags.
-- eval-paraphrase has no alternatives mechanism (unlike eval-coverage):
-  the kept RayCast3D class page doesn't match the mouse question's regex
-  even though it partially answers. Fine for now; know it when reading
-  FAIL lines.
+- eval-paraphrase has no alternatives mechanism (unlike eval-coverage);
+  know it when reading FAIL lines.
 - bun run lint: prettier only covers src/ and ingest/ — scripts/ gets
   eslint+tsc but no formatting.
 
@@ -74,4 +66,4 @@ retrieve()/retrieveDetailed() test without the answer-writing LLM; bun run
 scripts/ask.ts "..." is the full pipeline. Reranker: read the RAW logit;
 embedder stays fp16 (ONNX q8 is a distorted space, don't "optimize"). bun
 test fails with "0 test files" — pre-existing. Diagnostics:
-diag-paraphrase-rank.ts, diag-gap.ts, diag-timing.ts.
+diag-paraphrase-rank.ts, diag-gap.ts, diag-timing.ts, diag-miss-shape.ts.
