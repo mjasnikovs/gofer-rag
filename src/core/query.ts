@@ -11,7 +11,7 @@
 import {embedQuery, loadEmbedder} from '../ai/embedder'
 import {rerank, loadReranker} from '../ai/reranker'
 import {generateAnswer, expandQuery} from '../ai/llm'
-import {loadTable, vectorSearch, ftsSearch, titleSearch, matchedTitles} from '../store/db'
+import {loadTable, vectorSearch, ftsSearch, titleSearch, matchedTitles, symbolTokens} from '../store/db'
 import {config} from '../config'
 import type {QueryResult, RankedChunk, StoredChunk} from '../types'
 
@@ -39,9 +39,11 @@ export async function warmup(): Promise<void> {
 // themselves (Tween, CanvasLayer), which lets titleSearch fire after all.
 // Questions that DO name a title skip expansion: candidate coverage is already
 // 99.99% there, and skipping keeps symbol lookups LLM-free and fast.
-export async function gatherCandidates(question: string): Promise<{candidates: StoredChunk[]; expansion: string}> {
-    const titled = (await matchedTitles(question)).length > 0
-    const expansion = titled ? '' : await expandQuery(question)
+export async function gatherCandidates(
+    question: string
+): Promise<{candidates: StoredChunk[]; expansion: string; titles: string[]}> {
+    const titles = await matchedTitles(question)
+    const expansion = titles.length > 0 ? '' : await expandQuery(question)
     const text = expansion ? `${question} ${expansion}` : question
     const vector = await embedQuery(text)
     const [vectorHits, ftsHits, titleHits] = await Promise.all([
@@ -50,7 +52,7 @@ export async function gatherCandidates(question: string): Promise<{candidates: S
         titleSearch(text, config.titleTopK)
     ])
     const byId = new Map(vectorHits.concat(ftsHits, titleHits).map(c => [c.id, c]))
-    return {candidates: [...byId.values()], expansion}
+    return {candidates: [...byId.values()], expansion, titles}
 }
 
 export type RetrievalDetail = {
@@ -73,17 +75,37 @@ export type RetrievalDetail = {
 // before. The detailed form exists so evals measure the production pipeline
 // while still seeing the pool and the expansion.
 export async function retrieveDetailed(question: string): Promise<RetrievalDetail> {
-    const {candidates, expansion} = await gatherCandidates(question)
+    const {candidates, expansion, titles} = await gatherCandidates(question)
     if (candidates.length === 0) return {candidates, expansion, kept: []}
     const scores = await rerank(
         expansion ? `${question} ${expansion}` : question,
         candidates.map(c => c.text)
     )
-    const kept = candidates
+    const ranked = candidates
         .map((candidate, i) => ({...candidate, score: scores[i]!}))
         .sort((a, b) => b.score - a.score)
         .filter(candidate => candidate.score >= config.rerankThreshold)
-        .slice(0, config.rerankKeep)
+    const kept = ranked.slice(0, config.rerankKeep)
+
+    // Title pin: a chapter named verbatim in the question is what the user is
+    // asking about, but the cross-encoder prefers tutorial prose that MENTIONS
+    // the class over its terse reference page opening with "Inherits:" — the
+    // BoxMesh page scored -2.1 at rank 11 while "Add a BoxMesh" SoftBody3D
+    // chunks filled the kept set (measured 2026-07-14, both rerank backends).
+    // So append the named chapter's best above-threshold chunk when none made
+    // the cut, preferring one that contains a member symbol from the question
+    // ("font property of Tree" wants Tree's font chunk, not Tree's intro).
+    // Refusals are untouched by construction: an above-threshold chunk outside
+    // kept can only exist when kept is already full. Same top-3-longest-titles
+    // cap as titleSearch.
+    const symbols = symbolTokens(question)
+    for (const title of [...titles].sort((a, b) => b.length - a.length).slice(0, 3)) {
+        if (kept.some(c => c.chapter === title)) continue
+        const own = ranked.filter(c => c.chapter === title)
+        const pick = own.find(c => symbols.some(s => c.text.includes(s))) ?? own[0]
+        if (pick) kept.push(pick)
+    }
+
     return {candidates, expansion, kept}
 }
 

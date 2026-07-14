@@ -79,6 +79,13 @@ export async function matchedTitles(question: string): Promise<string[]> {
     )
 }
 
+// snake_case / ALL_CAPS tokens are member names under Godot's uniform naming
+// (optional leading underscore: virtual methods are _named_like_this). Shared
+// by titleSearch's symbol lookup and retrieveDetailed's title pin so the two
+// can't drift on what counts as a symbol.
+export const symbolTokens = (text: string): string[] =>
+    text.match(/\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? []
+
 // Chapter titles are Godot symbol names (Sprite2D, AnimationPlayer, ...), so a
 // title appearing verbatim in the question is a direct pointer to its chapter.
 // Corpus-wide BM25 can't follow it — common classes like Sprite2D are mentioned
@@ -94,14 +101,12 @@ export async function titleSearch(question: string, k: number): Promise<StoredCh
     const table = await getTable()
     const ftsHits = (await table.search(question, 'fts').where(where).limit(k).toArray()) as StoredChunk[]
 
-    // Symbol lookup: snake_case / ALL_CAPS tokens in the question are member
-    // names (Godot's uniform naming), and within the named chapters a chunk
-    // containing one verbatim is near-certainly the target. Within-chapter BM25
-    // alone misses these in huge classes (RenderingServer, Node, TextEdit):
-    // member names tokenize into common words like "get". Only [a-z0-9_]
-    // tokens reach the LIKE clause, so interpolation is safe.
-    // Optional leading underscore: virtual methods are _named_like_this.
-    const symbols = question.match(/\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? []
+    // Symbol lookup: within the named chapters a chunk containing a member
+    // name verbatim is near-certainly the target. Within-chapter BM25 alone
+    // misses these in huge classes (RenderingServer, Node, TextEdit): member
+    // names tokenize into common words like "get". Only [a-z0-9_] tokens reach
+    // the LIKE clause, so interpolation is safe.
+    const symbols = symbolTokens(question)
     const symbolHits =
         symbols.length === 0 ?
             []

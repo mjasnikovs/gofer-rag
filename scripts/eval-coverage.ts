@@ -213,16 +213,18 @@ console.log(`${label}: ${ok ? 'PASS' : 'FAIL'}  ${total.pass}/${total.total} can
 // the entity by name, so the answer LLM really has usable context. Keyed by
 // class name or "Class.member".
 //
-// Deliberately NOT included, so they stay honest misses:
-//   BoxMesh                 kept chapters (SoftBody3D, lightmaps) are unrelated
-//   Curve                   "Beziers, curves and paths" documents Curve2D/3D,
-//                           never the Curve resource itself
-//   Tree.font               GUI skinning explains theming generally, not Tree's
-//                           font item
-//   CollisionObject3D       "Physics introduction" only ever names the 2D class
-//   ScriptLanguageExtension._get_recognized_extensions
-//                           kept docs describe the same-named method of OTHER
-//                           classes — wrong grounding for this question
+// Deliberately NOT included, so they stay honest misses (2 as of 2026-07-14;
+// the title pin in retrieveDetailed fixed BoxMesh, CollisionObject3D and
+// ScriptLanguageExtension._get_recognized_extensions — their own pages score
+// above the -4 gate but ranked past rerankKeep, measured on both backends):
+//   Curve                   own chunks score BELOW the -4 gate for "What is
+//                           Curve used for" (best -4.6/-5.0 box/ONNX), so the
+//                           pin can't reach them; kept "Beziers, curves and
+//                           paths" documents Curve2D/3D, never Curve itself
+//   Tree.font               "font" has no symbol shape (no underscore), so the
+//                           pin takes Tree's best chunk, which doesn't mention
+//                           font — same single-English-word-member gap as
+//                           TextEdit.language at the candidate stage
 const ACCEPTED_ALTERNATIVES: Record<string, string[]> = {
     // "adjust the Influence property in the PhysicalBoneSimulator3D node that
     // is the parent of all PhysicalBone3D nodes" — explains the node's role.
