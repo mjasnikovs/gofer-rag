@@ -1,60 +1,72 @@
 Let's continue improving gofer (state documented in memory under
-gofer-rag-architecture; latest work: realistic-questions eval + expansion
-prompt fix for Godot-3-named questions, fifth session 2026-07-14).
+gofer-rag-architecture; latest work: near-title matching + judged answer
+eval baseline, sixth session 2026-07-14).
 
 Current state (all measured, GPU box): eval-retrieval 10/10, eval-paraphrase
-22/22 (21 normal, RERANK_MIN 20), eval-realistic 28/33 (min 27, NEW — in
-test:evals now), eval-coverage 100% / --lowercase 97.6%, coverage --rerank
-100 e2e 98/100, llm-gate 2/2. `bun run test` wraps the whole chain in the
-GPU rerank box (~6 min; realistic's 3 offtopic cases call the 27B via
-query()). Evals need the llama server (docker start llama-turboquant).
+20-21/22 (RERANK_MIN 20), eval-realistic 29/33 (min 27), eval-coverage 100%
+/ --lowercase 97.6%, coverage --rerank 100 e2e 98/100, llm-gate 2/2,
+eval:answers baseline graded 24/30 with grounded 24/24 / answers 23/24 /
+cited 23/24 (no min yet — single self-judged measurement, not in
+test:evals). `bun run test` wraps the chain in the GPU rerank box (~6 min).
+Evals need the llama server (docker start llama-turboquant) — CHECK IT'S
+NOT BUSY FIRST (see caveats).
 
 Closed — don't reopen without new evidence:
-- PROMPT LEVERS ARE EXHAUSTED for expansion vocabulary. The 4 realistic
-  misses (falls-through-floor, freezes-on-load, andriod typo, world-size)
-  all need docs vocabulary the 27B doesn't emit ("Continuous Collision
-  Detection", "Background loading", "Exporting for Android", "Large world
-  coordinates"). A "terms may be docs page titles" clause was probed with 3
-  example pairs — every pair fixed some and collapsed others (yield→NONE,
-  mouse/chase losing RayCast3D/NavigationAgent2D). That's the second
-  prompt-roulette verdict after the fourth session's six wordings. Next
-  lever must be NON-PROMPT (see candidates).
-- e2e misses Curve + Tree.font: out of title-pin reach (diag-miss-shape.ts
-  has numbers); 98/100 is this design's honest ceiling.
-- Realistic-eval expects: when it fails, READ THE KEPT CHAPTERS first —
-  3 of the first-run "failures" were the eval's own too-narrow regexes.
+- PROMPT LEVERS EXHAUSTED for expansion vocabulary (two prompt-roulette
+  verdicts). NON-PROMPT levers for the remaining misses also measured DEAD
+  this session: question spell-correct (even perfectly corrected, BM25
+  buries "Exporting for Android" under competing Android chapters) and
+  expansion-term→chapter-title grounding (best term↔answer-title similarity
+  0.23-0.33 across all misses — nothing to fuzzy-match). Near-title
+  matching of the QUESTION (shipped, db.ts nearTitles) was the lever that
+  worked; the 3 remaining realistic misses (falls-through-floor needs
+  "Continuous Collision Detection", freezes-on-load needs "Background
+  loading" — passes on ResourceLoader-emitting epochs, world-size needs
+  "Large world coordinates") have zero lexical overlap with their answer
+  titles, so near-title can't reach them either. They are documented
+  vocabulary-bound misses; 29-30/33 is the honest level.
+- Looser near-title rules: coverage fractions matched "Step by step" from
+  "stop", FastNoiseLite from "fast"; single-token titles junk-match. The
+  shipped rule (ALL non-stopword title tokens covered, >=2 tokens, exact |
+  >=4-char mutual prefix | Damerau<=1 on >=6-char) is the measured sweet
+  spot; verified junk-free on passing + offtopic probes, both backends.
+- e2e misses Curve + Tree.font: out of reach; 98/100 honest ceiling.
+- Realistic-eval expects: when it fails, READ THE KEPT CHAPTERS first.
 
 Next candidates, in rough priority — measure, don't guess:
 
-1. Ground expansion terms in the real chapter list: after expandQuery,
-   fuzzy-match each term against the 1581 chapter titles (the list is
-   cached in db.ts); a matched term becomes a verbatim title → titleSearch
-   fires on it. Could fix andriod ("Android"→? probably not) and world-size
-   (no — "FloatingPointPrecision" matches nothing). Honestly evaluate
-   whether it fixes ANY of the 4 before building; it may only help future
-   cases. The stronger variant: give titleSearch's within-chapter treatment
-   to NEAR-title terms.
-2. Question spell-correct against corpus vocabulary (symspell-style over
-   FTS tokens): "andriod"→"android", "colison"→"collision", "raycst2d"→
-   "raycast2d". Fixes the typo category at the pool level; measure BM25
-   after correction actually surfaces "Exporting for Android" (many
-   Android chapters compete).
-3. Expansion latency polish (only if free): ~0.5s per title-less query;
-   overlap expandQuery with the unexpanded embed only after measuring
-   (scripts/diag-timing.ts).
-4. Answer quality is still unmeasured beyond the refusal gate — nobody
-   reads the LLM's answers systematically. A judged answer eval (grounding
-   + correctness on the realistic set) is the next fresh axis.
+1. Answer-quality follow-ups from the baseline: (a) measure judge
+   run-to-run stability (rerun eval:answers 2-3x on an idle server), then
+   set a min and decide whether it joins a test target; (b) the blurry-
+   sprite case is answers=false because kept context covers downscale
+   filtering while the question asks upscale — a retrieval nuance, maybe a
+   better expect/text regex or accept as honest.
+2. Expansion starvation hardening: expandQuery has a 15s timeout, ONE
+   retry might rescue eval runs during 27B contention (measure timeout
+   rate first — tmp-probe-expansion-latency pattern in session history,
+   5 consecutive timeouts then 2.6-9.2s successes when a neighbor client
+   was prefilling 83k tokens). Also consider: warnedExpansionDown prints
+   only the FIRST timeout per process — evals can silently lose expansion
+   on many questions; a per-run timeout COUNT in eval output would make
+   contention visible.
+3. Expansion latency polish (only if free): ~0.5s per title-less query
+   when idle; overlap expandQuery with the unexpanded embed only after
+   measuring (scripts/diag-timing.ts).
 
 Measurement caveats (all bit or nearly bit earlier sessions):
-- Expansion nondeterminism comes in EPOCHS: today 4/4 identical per
-  question all day, other days it flips run to run. Probe 3-4x; realistic
-  has 2 flaky cases (health-bar, null-instance) → min 27 has that margin.
+- THE 27B IS A SHARED INSTANCE — other clients send huge prompts (83k
+  tokens seen) into its single slot and expansion calls starve into their
+  15s timeout. A chain run failed paraphrase 18/22 from this alone; solo
+  re-runs passed. Before server-heavy evals, poll localhost:8080/slots
+  until is_processing:false, and read eval output for "query expansion
+  unavailable" before blaming the pipeline.
+- Expansion nondeterminism comes in EPOCHS (freezes-on-load passes on
+  ResourceLoader epochs). Probe 3-4x; realistic min 27 carries the flaky
+  margin (health-bar, null-instance).
 - e2e --rerank 100 noisy ±1 (97-99 = "still 98"); realistic noisy ±2
-  (27-29 = "still 28"). Only investigate bigger drops.
+  (28-30 = "still 29"). Only investigate bigger drops.
 - Eval box GGUF Q8_0 vs serving ONNX q8 logits differ (flips near -4 and
-  rank-5-vs-6); confirm pin/threshold conclusions on BOTH backends
-  (diag-miss-shape.ts runs either).
+  rank-5-vs-6); confirm pin/threshold conclusions on BOTH backends.
 - eval-coverage's e2e sample shares the seeded RNG with the member sample:
   identical flags or numbers aren't comparable.
 - bun run lint: prettier only covers src/ and ingest/ — scripts/ gets
@@ -63,8 +75,7 @@ Measurement caveats (all bit or nearly bit earlier sessions):
 Notes: retrieve()/retrieveDetailed() test without the answer LLM; bun run
 scripts/ask.ts "..." is the full pipeline. Reranker: read the RAW logit;
 embedder stays fp16 (ONNX q8 is a distorted space, don't "optimize"). bun
-test fails with "0 test files" — pre-existing. Diagnostics:
+test fails with "0 test files" — pre-existing. Case list shared by
+eval-realistic + eval-answers lives in scripts/realistic-cases.ts (own
+module because both evals run at import time). Diagnostics:
 diag-paraphrase-rank.ts, diag-gap.ts, diag-timing.ts, diag-miss-shape.ts.
-Corpus text dump for expectation-verification greps: see the tmp-dump
-pattern in this session's history or query LanceDB directly (chapter list
-is cached in db.ts chapterList()).
