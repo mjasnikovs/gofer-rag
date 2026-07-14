@@ -79,6 +79,57 @@ export async function matchedTitles(question: string): Promise<string[]> {
     )
 }
 
+// Near-title matching: the question names a chapter without quoting its title
+// verbatim — "how do i export my game to andriod" is a stem and a transposed
+// letter away from "Exporting for Android", which BM25 can't see (the typo
+// indexes nothing and corpus-wide "export android" loses to Resolving-crashes /
+// Compiling-for-Android chunks — measured 2026-07-14, even with the typo
+// fixed). A title fires only when EVERY non-stopword token is covered by some
+// question token and it has ≥2 such tokens. Looser rules were probed first and
+// matched junk: coverage fractions pulled "Step by step" from "stop" and
+// FastNoiseLite from "fast"; single-token titles are excluded for the same
+// reason (Export, Android, int). Under this rule the andriod question matches
+// exactly one title and the pizza/unity off-topic probes match none.
+const NEAR_STOPWORDS = new Set(
+    'a an and are as at be by can do does for how i in is it my of on or the to what whats when where which why with'.split(
+        ' '
+    )
+)
+const nearTokens = (s: string): string[] =>
+    (s.toLowerCase().match(/[a-z0-9_]+/g) ?? []).filter(t => !NEAR_STOPWORDS.has(t))
+
+// Damerau-Levenshtein (adjacent transposition counts 1, so andriod→android is
+// distance 1). Tokens are short; callers gate by length before paying O(mn).
+function editDistance(a: string, b: string): number {
+    const d = Array.from({length: a.length + 1}, (_, i) => [i, ...Array<number>(b.length).fill(0)])
+    for (let j = 0; j <= b.length; j++) d[0]![j] = j
+    for (let i = 1; i <= a.length; i++)
+        for (let j = 1; j <= b.length; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1
+            d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost)
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+                d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + cost)
+        }
+    return d[a.length]![b.length]!
+}
+
+// Token coverage: exact, one a ≥4-char prefix of the other (export/exporting —
+// crude stemming), or one edit apart on ≥6-char tokens (typos; 4-char words
+// are one edit from each other constantly — stop/step).
+const coversToken = (q: string, t: string): boolean =>
+    q === t
+    || (q.length >= 4 && t.length >= 4 && (q.startsWith(t) || t.startsWith(q)))
+    || (q.length >= 6 && t.length >= 6 && Math.abs(q.length - t.length) <= 1 && editDistance(q, t) <= 1)
+
+export async function nearTitles(question: string): Promise<string[]> {
+    const qTokens = nearTokens(question)
+    if (qTokens.length === 0) return []
+    return (await chapterList()).filter(title => {
+        const tTokens = nearTokens(title)
+        return tTokens.length >= 2 && tTokens.every(t => qTokens.some(q => coversToken(q, t)))
+    })
+}
+
 // snake_case / ALL_CAPS tokens are member names under Godot's uniform naming
 // (optional leading underscore: virtual methods are _named_like_this). Shared
 // by titleSearch's symbol lookup and retrieveDetailed's title pin so the two
@@ -93,11 +144,22 @@ export const symbolTokens = (text: string): string[] =>
 // so this searches within just the named chapters instead.
 export async function titleSearch(question: string, k: number): Promise<StoredChunk[]> {
     const titles = await matchedTitles(question)
-    if (titles.length === 0) return []
     // Longest titles are the most specific mentions; cap so a title-heavy
-    // question can't flood the reranker.
+    // question can't flood the reranker. Near-title matches (fuzzy, see
+    // nearTitles) ride along after the verbatim ones with their own smaller
+    // cap: they never displace a named chapter, only add candidates the
+    // reranker judges ("Exporting for Android" enters at rerank rank 1, score
+    // 2.03, for the andriod-typo question — measured 2026-07-14). They do NOT
+    // count as matchedTitles: expansion gating and the title pin stay
+    // verbatim-only.
     const named = titles.sort((a, b) => b.length - a.length).slice(0, 3)
-    const where = `chapter IN (${named.map(t => `'${t.replace(/'/g, "''")}'`).join(', ')})`
+    const near = (await nearTitles(question))
+        .filter(t => !named.includes(t))
+        .sort((a, b) => b.length - a.length)
+        .slice(0, 2)
+    const chapters = [...named, ...near]
+    if (chapters.length === 0) return []
+    const where = `chapter IN (${chapters.map(t => `'${t.replace(/'/g, "''")}'`).join(', ')})`
     const table = await getTable()
     const ftsHits = (await table.search(question, 'fts').where(where).limit(k).toArray()) as StoredChunk[]
 
