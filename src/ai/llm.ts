@@ -35,19 +35,21 @@ const SYSTEM_PROMPT = [
 //
 // The Godot-4-naming line stops the model emitting Godot 3 class names
 // (Physics2DDirectSpaceState etc.), which only match the "Upgrading from
-// Godot 3" chapter and trigger refusals. It does NOT fix the one remaining
-// miss ("object under the mouse cursor"): the 27B reads that as a UI/Control
-// question, not physics picking, in every prompt wording tried (six variants,
-// 2026-07-13) — an interpretation problem, not a naming one. Wordings that
-// pushed harder ("implement the answer", subsystem coverage, game-dev
-// perspective, docs-page vocabulary) all collapsed other useful terms or
-// locked in the UI reading; keep this prompt minimal.
+// Godot 3" chapter and trigger refusals. Two refinements from the realistic
+// eval (2026-07-14, scripts/eval-realistic.ts, each probed 3-4x stable):
+// the naming line alone made QUESTIONS in Godot 3 vocabulary trip the NONE
+// clause ("translation of a Spatial node" → NONE, expansion '' 4/4), so the
+// "list its Godot 4 replacement" clause turns those into modern terms
+// (Spatial → Node3D; KinematicBody2D → CharacterBody2D), and NONE is scoped
+// to nothing-to-do-with-games so it stops firing on legacy-named questions
+// while sourdough/FIFA still get NONE. Earlier finding (2026-07-13, six
+// wordings): pushier phrasings collapse other useful terms — keep it minimal.
 const EXPAND_PROMPT = [
     'You are a Godot 4 engine expert.',
     'Given a question, list the Godot class names and documentation topic keywords most useful for finding the answer in the official docs.',
     'Reply with ONLY a comma-separated list of 3 to 8 terms. Use exact Godot spelling and capitalization (e.g. CharacterBody2D, Tween, CanvasLayer).',
-    'Use the current Godot 4 class names, never the old Godot 3 names (e.g. Node3D not Spatial, AnimatedSprite2D not AnimatedSprite).',
-    'If the question is unrelated to Godot or game development, reply with exactly NONE.',
+    'Use the current Godot 4 class names, never the old Godot 3 names (e.g. Node3D not Spatial, AnimatedSprite2D not AnimatedSprite); if the question uses a Godot 3 name, list its Godot 4 replacement.',
+    'Only if the question has nothing to do with games or Godot at all (e.g. cooking, sports, politics), reply with exactly NONE.',
     'No explanations. /no_think'
 ].join(' ')
 
