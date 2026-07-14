@@ -1,81 +1,33 @@
-Let's continue improving gofer (state documented in memory under
-gofer-rag-architecture; latest work: near-title matching + judged answer
-eval baseline, sixth session 2026-07-14).
+Let's continue improving gofer (state in memory: gofer-rag-architecture —
+read it first; latest commits 1e34826/74d54a0/8b4191b: near-title matching +
+judged answer eval, sixth session 2026-07-14).
 
-Current state (all measured, GPU box): eval-retrieval 10/10, eval-paraphrase
-20-21/22 (RERANK_MIN 20), eval-realistic 29/33 (min 27), eval-coverage 100%
-/ --lowercase 97.6%, coverage --rerank 100 e2e 98/100, llm-gate 2/2,
-eval:answers baseline graded 24/30 with grounded 24/24 / answers 23/24 /
-cited 23/24 (no min yet — single self-judged measurement, not in
-test:evals). `bun run test` wraps the chain in the GPU rerank box (~6 min).
-Evals need the llama server (docker start llama-turboquant) — CHECK IT'S
-NOT BUSY FIRST (see caveats).
+All evals green and re-verified after near-title matching (GPU box): retrieval
+10/10, paraphrase 20-21/22 (min 20), realistic 29/33 (min 27, was 28), coverage
+100%/97.6%, e2e 98/100 (same two ceiling misses), llm-gate 2/2. NEW: eval:answers
+baseline — graded 24/30, grounded 24/24, answers 23/24, cited 23/24 (no min yet,
+not in test:evals). Evals need the llama server (docker start llama-turboquant) —
+it is a SHARED instance: poll localhost:8080/slots until is_processing:false
+before server-heavy runs, and grep eval output for "query expansion unavailable"
+before blaming the pipeline (an 83k-token neighbor prompt starved expansion and
+sank a chain run to paraphrase 18/22; solo re-runs passed).
 
-Closed — don't reopen without new evidence:
-- PROMPT LEVERS EXHAUSTED for expansion vocabulary (two prompt-roulette
-  verdicts). NON-PROMPT levers for the remaining misses also measured DEAD
-  this session: question spell-correct (even perfectly corrected, BM25
-  buries "Exporting for Android" under competing Android chapters) and
-  expansion-term→chapter-title grounding (best term↔answer-title similarity
-  0.23-0.33 across all misses — nothing to fuzzy-match). Near-title
-  matching of the QUESTION (shipped, db.ts nearTitles) was the lever that
-  worked; the 3 remaining realistic misses (falls-through-floor needs
-  "Continuous Collision Detection", freezes-on-load needs "Background
-  loading" — passes on ResourceLoader-emitting epochs, world-size needs
-  "Large world coordinates") have zero lexical overlap with their answer
-  titles, so near-title can't reach them either. They are documented
-  vocabulary-bound misses; 29-30/33 is the honest level.
-- Looser near-title rules: coverage fractions matched "Step by step" from
-  "stop", FastNoiseLite from "fast"; single-token titles junk-match. The
-  shipped rule (ALL non-stopword title tokens covered, >=2 tokens, exact |
-  >=4-char mutual prefix | Damerau<=1 on >=6-char) is the measured sweet
-  spot; verified junk-free on passing + offtopic probes, both backends.
-- e2e misses Curve + Tree.font: out of reach; 98/100 honest ceiling.
-- Realistic-eval expects: when it fails, READ THE KEPT CHAPTERS first.
+Priorities:
+1. Answer-eval follow-ups: rerun eval:answers 2-3x on an idle server to measure
+   judge run-to-run stability, then set a min and decide where it lives. Decide
+   the blurry-sprite case (context covers downscale filtering, question asks
+   upscale — retrieval nuance vs honest answers=false).
+2. Expansion-starvation hardening: measure timeout rate first, then one retry on
+   expandQuery's 15s timeout + a per-run timeout COUNT in eval output (the
+   once-per-process warning masks how many questions silently lost expansion).
+3. Expansion latency overlap (only if free, measure with diag-timing.ts first).
 
-Next candidates, in rough priority — measure, don't guess:
+Closed — don't reopen: prompt levers for expansion vocabulary (two roulette
+verdicts); spell-correct and expansion-term→title grounding (both measured
+dead); the 3 remaining realistic misses have zero lexical overlap with their
+answer titles (29-30/33 is honest); e2e Curve + Tree.font (98/100 ceiling).
 
-1. Answer-quality follow-ups from the baseline: (a) measure judge
-   run-to-run stability (rerun eval:answers 2-3x on an idle server), then
-   set a min and decide whether it joins a test target; (b) the blurry-
-   sprite case is answers=false because kept context covers downscale
-   filtering while the question asks upscale — a retrieval nuance, maybe a
-   better expect/text regex or accept as honest.
-2. Expansion starvation hardening: expandQuery has a 15s timeout, ONE
-   retry might rescue eval runs during 27B contention (measure timeout
-   rate first — tmp-probe-expansion-latency pattern in session history,
-   5 consecutive timeouts then 2.6-9.2s successes when a neighbor client
-   was prefilling 83k tokens). Also consider: warnedExpansionDown prints
-   only the FIRST timeout per process — evals can silently lose expansion
-   on many questions; a per-run timeout COUNT in eval output would make
-   contention visible.
-3. Expansion latency polish (only if free): ~0.5s per title-less query
-   when idle; overlap expandQuery with the unexpanded embed only after
-   measuring (scripts/diag-timing.ts).
-
-Measurement caveats (all bit or nearly bit earlier sessions):
-- THE 27B IS A SHARED INSTANCE — other clients send huge prompts (83k
-  tokens seen) into its single slot and expansion calls starve into their
-  15s timeout. A chain run failed paraphrase 18/22 from this alone; solo
-  re-runs passed. Before server-heavy evals, poll localhost:8080/slots
-  until is_processing:false, and read eval output for "query expansion
-  unavailable" before blaming the pipeline.
-- Expansion nondeterminism comes in EPOCHS (freezes-on-load passes on
-  ResourceLoader epochs). Probe 3-4x; realistic min 27 carries the flaky
-  margin (health-bar, null-instance).
-- e2e --rerank 100 noisy ±1 (97-99 = "still 98"); realistic noisy ±2
-  (28-30 = "still 29"). Only investigate bigger drops.
-- Eval box GGUF Q8_0 vs serving ONNX q8 logits differ (flips near -4 and
-  rank-5-vs-6); confirm pin/threshold conclusions on BOTH backends.
-- eval-coverage's e2e sample shares the seeded RNG with the member sample:
-  identical flags or numbers aren't comparable.
-- bun run lint: prettier only covers src/ and ingest/ — scripts/ gets
-  eslint+tsc but no formatting.
-
-Notes: retrieve()/retrieveDetailed() test without the answer LLM; bun run
-scripts/ask.ts "..." is the full pipeline. Reranker: read the RAW logit;
-embedder stays fp16 (ONNX q8 is a distorted space, don't "optimize"). bun
-test fails with "0 test files" — pre-existing. Case list shared by
-eval-realistic + eval-answers lives in scripts/realistic-cases.ts (own
-module because both evals run at import time). Diagnostics:
-diag-paraphrase-rank.ts, diag-gap.ts, diag-timing.ts, diag-miss-shape.ts.
+Caveats: expansion nondeterminism comes in epochs (probe 3-4x); realistic noisy
+±2 (28-30 = "still 29"); e2e ±1 (97-99 = "still 98"); confirm threshold/rank
+conclusions on BOTH rerank backends; when eval-realistic fails, READ THE KEPT
+CHAPTERS before blaming the pipeline.
