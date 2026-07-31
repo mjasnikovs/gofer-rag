@@ -10,6 +10,17 @@
     "shasum": "1da497d8c3e9f4e2535ce28bb1479c3556769859",
     "integrity": "sha512-uAV83T/7qjn0H5M4UpNIG1UCI8p6dL924ZBfQFAlK2NRh3Nnmkkfu6RwJ53MU1/DMAxEQEzpAbaopa00I7hrGw==",
     "verifiedNodeVersions": ["v22.18.0", "v26.2.0"],
+    "registry": {
+        "url": "https://registry.npmjs.org/",
+        "tarballUrl": "https://registry.npmjs.org/@mjasnikovs/gofer-rag/-/gofer-rag-0.1.0-canary.0.tgz",
+        "requestedTag": "canary",
+        "distTags": {
+            "canary": "0.1.0-canary.0",
+            "latest": "0.1.0-canary.0"
+        },
+        "published": true,
+        "credentialRotationVerification": "waived by repository owner; not verified"
+    },
     "files": [
         {
             "path": ".lancedb/__manifest/_transactions/0-8ccf9310-863f-4724-bac7-cac9f5c5f68e.txn",
