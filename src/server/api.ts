@@ -6,9 +6,9 @@
 // A query that runs but finds nothing is a *successful* request with found:false
 // (HTTP 200), not an error — the caller reads result.found / result.message.
 
-import {query} from '../core/query'
-import {config} from '../config'
-import type {QueryResult} from '../types'
+import {query} from '../core/query.js'
+import {config} from '../config.js'
+import type {QueryResult} from '../types.js'
 
 type QueryBody = {q?: string}
 type QueryHandler = (question: string) => Promise<QueryResult>

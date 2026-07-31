@@ -3,7 +3,7 @@
 // which is our second line of defence against guessing (the reranker gate is the
 // first — this only runs on passages that already cleared it).
 
-import {config} from '../config'
+import {config, getOptions} from '../config.js'
 
 type ChatMessage = {
     role: 'system' | 'user'
@@ -70,11 +70,12 @@ let warnedExpansionDown = false
 // pipeline, instead of failing.
 export async function expandQuery(question: string, fetcher: FetchFunction = fetch): Promise<string> {
     try {
-        const res = await fetcher(`${config.llmBaseUrl}/chat/completions`, {
+        const options = getOptions()
+        const res = await fetcher(`${options.llmBaseUrl}/chat/completions`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                model: config.llmModel,
+                model: options.llmModel,
                 messages: [
                     {role: 'system', content: EXPAND_PROMPT},
                     {role: 'user', content: question}
@@ -104,14 +105,15 @@ export async function generateAnswer(
     context: string,
     fetcher: FetchFunction = fetch
 ): Promise<string> {
+    const options = getOptions()
     const messages: ChatMessage[] = [
         {role: 'system', content: SYSTEM_PROMPT},
         {role: 'user', content: `Context:\n${context}\n\nQuestion: ${question}`}
     ]
-    const res = await fetcher(`${config.llmBaseUrl}/chat/completions`, {
+    const res = await fetcher(`${options.llmBaseUrl}/chat/completions`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({model: config.llmModel, messages, temperature: 0.2, stream: false})
+        body: JSON.stringify({model: options.llmModel, messages, temperature: 0.2, stream: false})
     })
     if (!res.ok) throw new Error(`LLM request failed: ${res.status} ${await res.text()}`)
     const data = (await res.json()) as ChatCompletionResponse

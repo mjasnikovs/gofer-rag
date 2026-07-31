@@ -10,20 +10,26 @@
 // so callers use embedQuery vs embedDocuments rather than a single embed().
 
 import {pipeline, type FeatureExtractionPipeline} from '@huggingface/transformers'
-import './runtime'
-import {config} from '../config'
+import {config, getOptions} from '../config.js'
+import {authorizeModelDownload, progressCallback} from './downloads.js'
 
 const QUERY_INSTRUCT =
     'Instruct: Given a question about the Godot game engine, retrieve documentation passages that answer it\nQuery:'
 
-let extractor: FeatureExtractionPipeline | null = null
+const extractors = new Map<string, FeatureExtractionPipeline>()
 
 async function getExtractor(): Promise<FeatureExtractionPipeline> {
-    if (!extractor)
-        extractor = await pipeline('feature-extraction', config.embedModel, {
-            dtype: config.embedDtype,
-            device: config.device
-        })
+    const {cacheDir} = getOptions()
+    const cached = extractors.get(cacheDir)
+    if (cached) return cached
+    await authorizeModelDownload('embedder')
+    const extractor = await pipeline('feature-extraction', config.embedModel, {
+        dtype: config.embedDtype,
+        device: config.device,
+        cache_dir: cacheDir,
+        progress_callback: progressCallback('embedder')
+    })
+    extractors.set(cacheDir, extractor)
     return extractor
 }
 
