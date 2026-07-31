@@ -1,9 +1,10 @@
 import {execFileSync, spawnSync} from 'node:child_process'
-import {existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join, resolve} from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const temporary = mkdtempSync(join(tmpdir(), 'gofer-rag-consumer-'))
 const project = join(temporary, 'project')
 const unrelated = join(temporary, 'unrelated-working-directory')
@@ -18,7 +19,7 @@ try {
     const packResult =
         suppliedTarball ? undefined : (
             JSON.parse(
-                execFileSync('npm', ['pack', '--json'], {
+                execFileSync(npm, ['pack', '--json'], {
                     cwd: root,
                     encoding: 'utf8',
                     stdio: ['ignore', 'pipe', 'pipe']
@@ -30,7 +31,7 @@ try {
     const tarball = suppliedTarball ? resolve(suppliedTarball) : join(root, packed.filename)
 
     writeFileSync(join(project, 'package.json'), JSON.stringify({private: true, type: 'module'}, null, 2))
-    run('npm', ['install', '--ignore-scripts', tarball, 'typescript@6.0.3'])
+    run(npm, ['install', '--ignore-scripts', tarball, 'typescript@6.0.3'])
 
     const node = process.env.GOFER_TEST_NODE ?? process.execPath
     const importTest = join(project, 'import-test.mjs')
@@ -56,7 +57,7 @@ try {
     const help = run(node, [cli, '--help'], {cwd: unrelated})
     if (!help.includes('Usage:')) throw new Error('CLI help did not render')
     const database = run(node, [cli, '--database-info'], {cwd: unrelated})
-    if (!database.includes(`database: ${join(packageRoot, '.lancedb')}`))
+    if (!database.includes(`database: ${realpathSync(join(packageRoot, '.lancedb'))}`))
         throw new Error(`database did not resolve from the installed module: ${database}`)
     if (!/rows: [1-9][0-9]*/.test(database)) throw new Error(`packaged database was empty: ${database}`)
 
