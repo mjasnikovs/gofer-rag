@@ -1,5 +1,7 @@
 # @mjasnikovs/gofer-rag
 
+![Gofer mascot reading the Godot Manual](docs/assets/gofer-hero.png)
+
 Node.js retrieval and grounded answer generation over a packaged LanceDB snapshot of the official Godot Engine 4.7
 documentation. Bun is used for repository development and ingestion, but is not required by package consumers.
 
