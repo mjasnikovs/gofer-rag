@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+*.epub binary
+*.gguf binary
+*.lance binary
+*.onnx binary
+*.onnx_data binary
