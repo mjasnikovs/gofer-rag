@@ -18,8 +18,7 @@
             "canary": "0.1.0-canary.0",
             "latest": "0.1.0-canary.0"
         },
-        "published": true,
-        "credentialRotationVerification": "waived by repository owner; not verified"
+        "published": true
     },
     "files": [
         {
