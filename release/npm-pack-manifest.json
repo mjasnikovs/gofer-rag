@@ -3,12 +3,12 @@
     "command": "npm pack --json; tar -tvzf mjasnikovs-gofer-rag-0.1.0-canary.0.tgz",
     "package": "@mjasnikovs/gofer-rag@0.1.0-canary.0",
     "filename": "mjasnikovs-gofer-rag-0.1.0-canary.0.tgz",
-    "tarballSize": 39554113,
-    "unpackedSize": 48609916,
-    "installedPackageSize": 48609916,
-    "entryCount": 40,
-    "shasum": "6bf4f0df7671c18eef74fc134de777f6aaa76d70",
-    "integrity": "sha512-O6AP+IM7AmJjDE80d9L6UbOkZdnYDsI8kdW+70rm+RNyNTJjHtGvpov6kXNzA88Zfbh+W/BmSyl5Rz5hSTrlkw==",
+    "tarballSize": 39554830,
+    "unpackedSize": 48611218,
+    "installedPackageSize": 48611218,
+    "entryCount": 41,
+    "shasum": "1da497d8c3e9f4e2535ce28bb1479c3556769859",
+    "integrity": "sha512-uAV83T/7qjn0H5M4UpNIG1UCI8p6dL924ZBfQFAlK2NRh3Nnmkkfu6RwJ53MU1/DMAxEQEzpAbaopa00I7hrGw==",
     "verifiedNodeVersions": ["v22.18.0", "v26.2.0"],
     "files": [
         {
@@ -152,6 +152,10 @@
             "size": 67
         },
         {
+            "path": "LICENSE",
+            "size": 1074
+        },
+        {
             "path": "LICENSE-DATA-CC-BY-3.0.txt",
             "size": 19467
         },
@@ -165,11 +169,11 @@
         },
         {
             "path": "package.json",
-            "size": 3213
+            "size": 3254
         },
         {
             "path": "README.md",
-            "size": 2575
+            "size": 2762
         }
     ]
 }

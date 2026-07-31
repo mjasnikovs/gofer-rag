@@ -63,3 +63,8 @@ An interactive terminal asks before first-run downloads. Noninteractive use must
 
 The included LanceDB is an adapted, chunked, and embedded form of the official Godot Engine 4.7 documentation. See
 `NOTICE-DATA.md` and the accompanying CC BY 3.0 and MIT data license files.
+
+## License
+
+The package code is available under the MIT License in `LICENSE`. The packaged documentation data retains its upstream
+CC BY 3.0 and MIT terms described in `NOTICE-DATA.md`.

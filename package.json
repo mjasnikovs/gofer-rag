@@ -2,6 +2,7 @@
     "name": "@mjasnikovs/gofer-rag",
     "version": "0.1.0-canary.0",
     "description": "Local retrieval and grounded answers over the Godot Engine 4.7 documentation",
+    "license": "MIT",
     "type": "module",
     "repository": {
         "type": "git",
@@ -25,6 +26,7 @@
     "files": [
         "dist/",
         ".lancedb/",
+        "LICENSE",
         "README.md",
         "LICENSE-DATA-CC-BY-3.0.txt",
         "LICENSE-DATA-MIT.txt",
