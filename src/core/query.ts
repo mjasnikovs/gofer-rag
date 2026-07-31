@@ -15,17 +15,45 @@ import {loadTable, vectorSearch, ftsSearch, titleSearch, matchedTitles, symbolTo
 import {config} from '../config'
 import type {QueryResult, RankedChunk, StoredChunk} from '../types'
 
+export type QueryDependencies = {
+    embedQuery: typeof embedQuery
+    loadEmbedder: typeof loadEmbedder
+    rerank: typeof rerank
+    loadReranker: typeof loadReranker
+    generateAnswer: typeof generateAnswer
+    expandQuery: typeof expandQuery
+    loadTable: typeof loadTable
+    vectorSearch: typeof vectorSearch
+    ftsSearch: typeof ftsSearch
+    titleSearch: typeof titleSearch
+    matchedTitles: typeof matchedTitles
+}
+
+const defaultDependencies: QueryDependencies = {
+    embedQuery,
+    loadEmbedder,
+    rerank,
+    loadReranker,
+    generateAnswer,
+    expandQuery,
+    loadTable,
+    vectorSearch,
+    ftsSearch,
+    titleSearch,
+    matchedTitles
+}
+
 // The LLM is told to emit config.notFoundMessage verbatim when the retrieved
 // context doesn't answer the question. It may add punctuation/quotes, so match
 // on a normalized prefix rather than exact equality.
-function isRefusal(answer: string): boolean {
+export function isRefusal(answer: string): boolean {
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')
     return normalize(answer).startsWith(normalize(config.notFoundMessage))
 }
 
 // Load both models and the table up front so the first query isn't slow.
-export async function warmup(): Promise<void> {
-    await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
+export async function warmup(dependencies: QueryDependencies = defaultDependencies): Promise<void> {
+    await Promise.all([dependencies.loadEmbedder(), dependencies.loadReranker(), dependencies.loadTable()])
 }
 
 // Build the candidate pool retrieve() reranks. Exported so evals measure the
@@ -40,19 +68,46 @@ export async function warmup(): Promise<void> {
 // Questions that DO name a title skip expansion: candidate coverage is already
 // 99.99% there, and skipping keeps symbol lookups LLM-free and fast.
 export async function gatherCandidates(
-    question: string
+    question: string,
+    dependencies: QueryDependencies = defaultDependencies
 ): Promise<{candidates: StoredChunk[]; expansion: string; titles: string[]}> {
-    const titles = await matchedTitles(question)
-    const expansion = titles.length > 0 ? '' : await expandQuery(question)
+    const titles = await dependencies.matchedTitles(question)
+    const expansion = titles.length > 0 ? '' : await dependencies.expandQuery(question)
     const text = expansion ? `${question} ${expansion}` : question
-    const vector = await embedQuery(text)
+    const vector = await dependencies.embedQuery(text)
     const [vectorHits, ftsHits, titleHits] = await Promise.all([
-        vectorSearch(vector, config.vectorTopK),
-        ftsSearch(text, config.ftsTopK),
-        titleSearch(text, config.titleTopK)
+        dependencies.vectorSearch(vector, config.vectorTopK),
+        dependencies.ftsSearch(text, config.ftsTopK),
+        dependencies.titleSearch(text, config.titleTopK)
     ])
-    const byId = new Map(vectorHits.concat(ftsHits, titleHits).map(c => [c.id, c]))
-    return {candidates: [...byId.values()], expansion, titles}
+    return {candidates: mergeCandidates(vectorHits, ftsHits, titleHits), expansion, titles}
+}
+
+export function mergeCandidates(...sources: StoredChunk[][]): StoredChunk[] {
+    return [...new Map(sources.flat().map(candidate => [candidate.id, candidate])).values()]
+}
+
+export function rankCandidates(
+    question: string,
+    candidates: StoredChunk[],
+    scores: number[],
+    titles: string[]
+): RankedChunk[] {
+    const ranked = candidates
+        .map((candidate, i) => ({...candidate, score: scores[i]!}))
+        .sort((a, b) => b.score - a.score)
+        .filter(candidate => candidate.score >= config.rerankThreshold)
+    const kept = ranked.slice(0, config.rerankKeep)
+
+    const symbols = symbolTokens(question)
+    for (const title of [...titles].sort((a, b) => b.length - a.length).slice(0, 3)) {
+        if (kept.some(candidate => candidate.chapter === title)) continue
+        const own = ranked.filter(candidate => candidate.chapter === title)
+        const pick = own.find(candidate => symbols.some(symbol => candidate.text.includes(symbol))) ?? own[0]
+        if (pick) kept.push(pick)
+    }
+
+    return kept
 }
 
 export type RetrievalDetail = {
@@ -74,19 +129,16 @@ export type RetrievalDetail = {
 // expansion (expandQuery rejects non-term-list replies) and rerank exactly as
 // before. The detailed form exists so evals measure the production pipeline
 // while still seeing the pool and the expansion.
-export async function retrieveDetailed(question: string): Promise<RetrievalDetail> {
-    const {candidates, expansion, titles} = await gatherCandidates(question)
+export async function retrieveDetailed(
+    question: string,
+    dependencies: QueryDependencies = defaultDependencies
+): Promise<RetrievalDetail> {
+    const {candidates, expansion, titles} = await gatherCandidates(question, dependencies)
     if (candidates.length === 0) return {candidates, expansion, kept: []}
-    const scores = await rerank(
+    const scores = await dependencies.rerank(
         expansion ? `${question} ${expansion}` : question,
         candidates.map(c => c.text)
     )
-    const ranked = candidates
-        .map((candidate, i) => ({...candidate, score: scores[i]!}))
-        .sort((a, b) => b.score - a.score)
-        .filter(candidate => candidate.score >= config.rerankThreshold)
-    const kept = ranked.slice(0, config.rerankKeep)
-
     // Title pin: a chapter named verbatim in the question is what the user is
     // asking about, but the cross-encoder prefers tutorial prose that MENTIONS
     // the class over its terse reference page opening with "Inherits:" — the
@@ -98,29 +150,27 @@ export async function retrieveDetailed(question: string): Promise<RetrievalDetai
     // Refusals are untouched by construction: an above-threshold chunk outside
     // kept can only exist when kept is already full. Same top-3-longest-titles
     // cap as titleSearch.
-    const symbols = symbolTokens(question)
-    for (const title of [...titles].sort((a, b) => b.length - a.length).slice(0, 3)) {
-        if (kept.some(c => c.chapter === title)) continue
-        const own = ranked.filter(c => c.chapter === title)
-        const pick = own.find(c => symbols.some(s => c.text.includes(s))) ?? own[0]
-        if (pick) kept.push(pick)
-    }
-
-    return {candidates, expansion, kept}
+    return {candidates, expansion, kept: rankCandidates(question, candidates, scores, titles)}
 }
 
-export async function retrieve(question: string): Promise<RankedChunk[]> {
-    return (await retrieveDetailed(question)).kept
+export async function retrieve(
+    question: string,
+    dependencies: QueryDependencies = defaultDependencies
+): Promise<RankedChunk[]> {
+    return (await retrieveDetailed(question, dependencies)).kept
 }
 
-export async function query(question: string): Promise<QueryResult> {
+export async function query(
+    question: string,
+    dependencies: QueryDependencies = defaultDependencies
+): Promise<QueryResult> {
     // First gate: nothing cleared the reranker threshold — don't even call the LLM.
-    const top = await retrieve(question)
+    const top = await retrieve(question, dependencies)
     if (top.length === 0) return {found: false, message: config.notFoundMessage}
 
     // Second gate: the LLM saw the context and judged it insufficient.
     const context = top.map((chunk, i) => `[${i + 1}] (${chunk.chapter})\n${chunk.text}`).join('\n\n')
-    const answer = await generateAnswer(question, context)
+    const answer = await dependencies.generateAnswer(question, context)
     if (isRefusal(answer)) return {found: false, message: config.notFoundMessage}
 
     return {

@@ -68,7 +68,7 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // Tree, Control, Timer, Range ...) and blanket case-insensitivity pulled them
 // into 7 of 12 natural test sentences AND into every "...property of X control?"
 // eval template (measured 2026-07-13), so those stay case-sensitive.
-const distinctiveTitle = (t: string) => /\d/.test(t) || (t.match(/[A-Z]/g) ?? []).length >= 2
+export const distinctiveTitle = (t: string) => /\d/.test(t) || (t.match(/[A-Z]/g) ?? []).length >= 2
 
 // Chapter titles that appear verbatim in the question. Also the pipeline's
 // "does this question name a Godot symbol?" test: no match means casual
@@ -100,7 +100,7 @@ const nearTokens = (s: string): string[] =>
 
 // Damerau-Levenshtein (adjacent transposition counts 1, so andriod→android is
 // distance 1). Tokens are short; callers gate by length before paying O(mn).
-function editDistance(a: string, b: string): number {
+export function editDistance(a: string, b: string): number {
     const d = Array.from({length: a.length + 1}, (_, i) => [i, ...Array<number>(b.length).fill(0)])
     for (let j = 0; j <= b.length; j++) d[0]![j] = j
     for (let i = 1; i <= a.length; i++)
@@ -116,7 +116,7 @@ function editDistance(a: string, b: string): number {
 // Token coverage: exact, one a ≥4-char prefix of the other (export/exporting —
 // crude stemming), or one edit apart on ≥6-char tokens (typos; 4-char words
 // are one edit from each other constantly — stop/step).
-const coversToken = (q: string, t: string): boolean =>
+export const coversToken = (q: string, t: string): boolean =>
     q === t
     || (q.length >= 4 && t.length >= 4 && (q.startsWith(t) || t.startsWith(q)))
     || (q.length >= 6 && t.length >= 6 && Math.abs(q.length - t.length) <= 1 && editDistance(q, t) <= 1)

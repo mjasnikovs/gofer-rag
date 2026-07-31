@@ -18,6 +18,8 @@ type ChatCompletionResponse = {
     choices: ChatChoice[]
 }
 
+type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+
 const SYSTEM_PROMPT = [
     'You are a Godot Engine documentation assistant.',
     'Answer the question using ONLY the provided context passages.',
@@ -66,9 +68,9 @@ let warnedExpansionDown = false
 // Returns '' when the LLM server is unreachable or the reply is not a usable
 // term list — retrieval then runs unexpanded, exactly the pre-expansion
 // pipeline, instead of failing.
-export async function expandQuery(question: string): Promise<string> {
+export async function expandQuery(question: string, fetcher: FetchFunction = fetch): Promise<string> {
     try {
-        const res = await fetch(`${config.llmBaseUrl}/chat/completions`, {
+        const res = await fetcher(`${config.llmBaseUrl}/chat/completions`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -97,12 +99,16 @@ export async function expandQuery(question: string): Promise<string> {
     }
 }
 
-export async function generateAnswer(question: string, context: string): Promise<string> {
+export async function generateAnswer(
+    question: string,
+    context: string,
+    fetcher: FetchFunction = fetch
+): Promise<string> {
     const messages: ChatMessage[] = [
         {role: 'system', content: SYSTEM_PROMPT},
         {role: 'user', content: `Context:\n${context}\n\nQuestion: ${question}`}
     ]
-    const res = await fetch(`${config.llmBaseUrl}/chat/completions`, {
+    const res = await fetcher(`${config.llmBaseUrl}/chat/completions`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({model: config.llmModel, messages, temperature: 0.2, stream: false})

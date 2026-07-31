@@ -6,3 +6,4 @@ dist/
 .lancedb/
 .claude/
 .bun/
+docs/GodotEngine.epub

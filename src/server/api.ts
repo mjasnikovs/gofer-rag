@@ -8,25 +8,36 @@
 
 import {query} from '../core/query'
 import {config} from '../config'
+import type {QueryResult} from '../types'
 
 type QueryBody = {q?: string}
+type QueryHandler = (question: string) => Promise<QueryResult>
 
-export function startApi(): ReturnType<typeof Bun.serve> {
-    return Bun.serve({
-        port: config.apiPort,
-        async fetch(req) {
-            const url = new URL(req.url)
+type ApiOptions = {
+    port?: number
+    query?: QueryHandler
+}
 
-            if (req.method === 'GET' && url.pathname === '/health') return Response.json({status: 'ok'})
+export function createApiHandler(runQuery: QueryHandler = query): (request: Request) => Promise<Response> {
+    return async request => {
+        const url = new URL(request.url)
 
-            if (req.method === 'POST' && url.pathname === '/query') {
-                const body = (await req.json()) as QueryBody
-                const question = body.q?.trim()
-                if (!question) return Response.json({error: 'missing "q"'}, {status: 400})
-                return Response.json(await query(question))
-            }
+        if (request.method === 'GET' && url.pathname === '/health') return Response.json({status: 'ok'})
 
-            return new Response('Not found', {status: 404})
+        if (request.method === 'POST' && url.pathname === '/query') {
+            const body = (await request.json()) as QueryBody
+            const question = body.q?.trim()
+            if (!question) return Response.json({error: 'missing "q"'}, {status: 400})
+            return Response.json(await runQuery(question))
         }
+
+        return new Response('Not found', {status: 404})
+    }
+}
+
+export function startApi(options: ApiOptions = {}): ReturnType<typeof Bun.serve> {
+    return Bun.serve({
+        port: options.port ?? config.apiPort,
+        fetch: createApiHandler(options.query)
     })
 }
