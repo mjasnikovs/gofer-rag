@@ -11,20 +11,32 @@ import {
     type PreTrainedTokenizer,
     type PreTrainedModel
 } from '@huggingface/transformers'
-import './runtime'
-import {config} from '../config'
+import {config, getOptions} from '../config.js'
+import {authorizeModelDownload, progressCallback} from './downloads.js'
 
-let tokenizer: PreTrainedTokenizer | null = null
-let model: PreTrainedModel | null = null
+type LoadedReranker = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
 
-async function load(): Promise<{tokenizer: PreTrainedTokenizer; model: PreTrainedModel}> {
-    if (!tokenizer) tokenizer = await AutoTokenizer.from_pretrained(config.rerankModel)
-    if (!model)
-        model = await AutoModelForSequenceClassification.from_pretrained(config.rerankModel, {
-            dtype: config.rerankDtype,
-            device: config.device
-        })
-    return {tokenizer, model}
+const loadedRerankers = new Map<string, LoadedReranker>()
+
+async function load(): Promise<LoadedReranker> {
+    const {cacheDir} = getOptions()
+    const cached = loadedRerankers.get(cacheDir)
+    if (cached) return cached
+    await authorizeModelDownload('reranker')
+    const progress = progressCallback('reranker')
+    const tokenizer = await AutoTokenizer.from_pretrained(config.rerankModel, {
+        cache_dir: cacheDir,
+        progress_callback: progress
+    })
+    const model = await AutoModelForSequenceClassification.from_pretrained(config.rerankModel, {
+        dtype: config.rerankDtype,
+        device: config.device,
+        cache_dir: cacheDir,
+        progress_callback: progress
+    })
+    const loaded = {tokenizer, model}
+    loadedRerankers.set(cacheDir, loaded)
+    return loaded
 }
 
 // Warm the model so the first real request isn't slow. When a rerank box is

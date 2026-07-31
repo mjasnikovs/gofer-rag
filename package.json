@@ -1,38 +1,78 @@
 {
-  "type": "module",
-  "packageManager": "bun@1.3.14",
-  "devDependencies": {
-    "@eslint/js": "10.0.1",
-    "@types/bun": "1.3.14",
-    "eslint": "10.6.0",
-    "globals": "17.7.0",
-    "prettier": "3.9.4",
-    "typescript": "6.0.3",
-    "typescript-eslint": "8.63.0"
-  },
-  "scripts": {
-    "rag-update": "bun run ingest/rag-update.ts",
-    "serve": "bun run scripts/serve.ts",
-    "format": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' '.github/**/*.yml'",
-    "check": "prettier --check 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' '.github/**/*.yml' && eslint . && tsc --noEmit",
-    "lint": "bun run format && eslint --fix . && tsc --noEmit",
-    "eval:retrieval": "bun run scripts/eval-retrieval.ts",
-    "eval:paraphrase": "bun run scripts/eval-paraphrase.ts",
-    "eval:coverage": "bun run scripts/eval-coverage.ts",
-    "eval:coverage:lowercase": "bun run scripts/eval-coverage.ts --lowercase",
-    "eval:realistic": "bun run scripts/eval-realistic.ts",
-    "eval:answers": "bun run scripts/eval-answers.ts",
-    "test": "AGENT=1 bun test --coverage",
-    "test:evals": "bun run eval:retrieval && bun run eval:paraphrase && bun run eval:realistic && bun run eval:coverage && bun run eval:coverage:lowercase",
-    "test:llm": "bun run scripts/eval-llm-gate.ts",
-    "test:models": "bun run scripts/rerank-box.ts bun run test:evals"
-  },
-  "dependencies": {
-    "@huggingface/transformers": "4.2.0",
-    "@lancedb/lancedb": "0.31.0",
-    "epub2": "3.0.2"
-  },
-  "trustedDependencies": [
-    "onnxruntime-node"
-  ]
+    "name": "@mjasnikovs/gofer-rag",
+    "version": "0.1.0-canary.0",
+    "description": "Local retrieval and grounded answers over the Godot Engine 4.7 documentation",
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+ssh://git@github.com/mjasnikovs/gofer-rag.git"
+    },
+    "homepage": "https://github.com/mjasnikovs/gofer-rag#readme",
+    "bugs": "https://github.com/mjasnikovs/gofer-rag/issues",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        }
+    },
+    "bin": {
+        "gofer-rag": "./dist/cli.js"
+    },
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "files": [
+        "dist/",
+        ".lancedb/",
+        "README.md",
+        "LICENSE-DATA-CC-BY-3.0.txt",
+        "LICENSE-DATA-MIT.txt",
+        "NOTICE-DATA.md"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "tag": "canary"
+    },
+    "packageManager": "bun@1.3.14",
+    "devDependencies": {
+        "@eslint/js": "10.0.1",
+        "@types/bun": "1.3.14",
+        "@types/node": "24.10.13",
+        "eslint": "10.6.0",
+        "globals": "17.7.0",
+        "prettier": "3.9.4",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.63.0",
+        "epub2": "3.0.2"
+    },
+    "scripts": {
+        "rag-update": "bun run ingest/rag-update.ts",
+        "serve": "bun run scripts/serve.ts",
+        "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+        "build": "npm run clean && tsc -p tsconfig.build.json",
+        "pack:dry-run": "npm run build && npm pack --dry-run --json",
+        "pack:verify": "npm run build && node scripts/test-package.mjs",
+        "test:package": "node scripts/test-package.mjs",
+        "format": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'release/*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml'",
+        "check": "prettier --check 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'release/*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml' && eslint . && tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
+        "lint": "bun run format && eslint --fix . && tsc --noEmit",
+        "eval:retrieval": "bun run scripts/eval-retrieval.ts",
+        "eval:paraphrase": "bun run scripts/eval-paraphrase.ts",
+        "eval:coverage": "bun run scripts/eval-coverage.ts",
+        "eval:coverage:lowercase": "bun run scripts/eval-coverage.ts --lowercase",
+        "eval:realistic": "bun run scripts/eval-realistic.ts",
+        "eval:answers": "bun run scripts/eval-answers.ts",
+        "test": "AGENT=1 bun test --coverage",
+        "test:evals": "bun run eval:retrieval && bun run eval:paraphrase && bun run eval:realistic && bun run eval:coverage && bun run eval:coverage:lowercase",
+        "test:llm": "bun run scripts/eval-llm-gate.ts",
+        "test:models": "bun run scripts/rerank-box.ts bun run test:evals"
+    },
+    "dependencies": {
+        "@huggingface/transformers": "4.2.0",
+        "@lancedb/lancedb": "0.31.0"
+    },
+    "trustedDependencies": [
+        "onnxruntime-node"
+    ]
 }

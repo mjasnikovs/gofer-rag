@@ -6,7 +6,7 @@
 
 import {createInterface} from 'node:readline/promises'
 import {stdin, stdout} from 'node:process'
-import {query, retrieve} from '../core/query'
+import {query, retrieve} from '../core/query.js'
 
 export async function startTui(): Promise<void> {
     const rl = createInterface({input: stdin, output: stdout})

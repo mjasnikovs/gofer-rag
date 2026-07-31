@@ -8,12 +8,12 @@
 //     → GATE: best score below threshold → "not found" (no LLM, cannot guess)
 //     → keep top-N above threshold → LLM writes a grounded, cited answer
 
-import {embedQuery, loadEmbedder} from '../ai/embedder'
-import {rerank, loadReranker} from '../ai/reranker'
-import {generateAnswer, expandQuery} from '../ai/llm'
-import {loadTable, vectorSearch, ftsSearch, titleSearch, matchedTitles, symbolTokens} from '../store/db'
-import {config} from '../config'
-import type {QueryResult, RankedChunk, StoredChunk} from '../types'
+import {embedQuery, loadEmbedder} from '../ai/embedder.js'
+import {rerank, loadReranker} from '../ai/reranker.js'
+import {generateAnswer, expandQuery} from '../ai/llm.js'
+import {loadTable, vectorSearch, ftsSearch, titleSearch, matchedTitles, symbolTokens} from '../store/db.js'
+import {config} from '../config.js'
+import type {QueryResult, RankedChunk, StoredChunk} from '../types.js'
 
 export type QueryDependencies = {
     embedQuery: typeof embedQuery

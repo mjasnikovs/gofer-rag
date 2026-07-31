@@ -1,6 +1,7 @@
 .pi-tasks/
 node_modules/
 dist/
+*.tgz
 *.d.ts
 .models/
 .lancedb/

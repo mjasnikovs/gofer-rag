@@ -2,13 +2,14 @@
 // The open table is cached so we don't reconnect on every query.
 
 import * as lancedb from '@lancedb/lancedb'
-import {config} from '../config'
-import type {StoredChunk} from '../types'
+import {config, getOptions} from '../config.js'
+import type {StoredChunk} from '../types.js'
 
 let cachedTable: lancedb.Table | null = null
+let cachedPath = ''
 
 async function connect(): Promise<lancedb.Connection> {
-    return lancedb.connect(config.dbPath)
+    return lancedb.connect(getOptions().databasePath)
 }
 
 // Drop any existing table and recreate it from the given rows (fresh ingest).
@@ -24,15 +25,22 @@ export async function recreateTable(rows: StoredChunk[]): Promise<void> {
 }
 
 async function getTable(): Promise<lancedb.Table> {
-    if (!cachedTable) {
+    const databasePath = getOptions().databasePath
+    if (!cachedTable || cachedPath !== databasePath) {
         const db = await connect()
         cachedTable = await db.openTable(config.table)
+        cachedPath = databasePath
     }
     return cachedTable
 }
 
 export async function loadTable(): Promise<void> {
     await getTable()
+}
+
+export async function databaseInfo(): Promise<{path: string; rows: number}> {
+    const table = await getTable()
+    return {path: getOptions().databasePath, rows: await table.countRows()}
 }
 
 export async function vectorSearch(vector: number[], k: number): Promise<StoredChunk[]> {

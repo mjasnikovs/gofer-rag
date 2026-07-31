@@ -37,3 +37,33 @@ export type QueryResult = {
     message?: string
     sources?: Source[]
 }
+
+export type ModelDownload = {
+    name: string
+    source: string
+    destination: string
+    expectedBytes: number
+}
+
+export type DownloadProgress = {
+    model: string
+    file?: string
+    status: string
+    loaded?: number
+    total?: number
+    progress?: number
+}
+
+export type ModelDownloadConsent = (models: ModelDownload[]) => boolean | Promise<boolean>
+
+export type GoferOptions = {
+    cacheDir?: string
+    databasePath?: string
+    llmBaseUrl?: string
+    llmModel?: string
+    allowModelDownloads?: boolean | ModelDownloadConsent
+    onDownloadProgress?: (progress: DownloadProgress) => void
+}
+
+export type ResolvedGoferOptions = Required<Omit<GoferOptions, 'onDownloadProgress'>>
+    & Pick<GoferOptions, 'onDownloadProgress'>
