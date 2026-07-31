@@ -4,7 +4,8 @@ import {tmpdir} from 'node:os'
 import {join, resolve} from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const npm = process.env.npm_execpath ? process.execPath : 'npm'
+const npmArguments = arguments_ => (process.env.npm_execpath ? [process.env.npm_execpath, ...arguments_] : arguments_)
 const temporary = mkdtempSync(join(tmpdir(), 'gofer-rag-consumer-'))
 const project = join(temporary, 'project')
 const unrelated = join(temporary, 'unrelated-working-directory')
@@ -19,7 +20,7 @@ try {
     const packResult =
         suppliedTarball ? undefined : (
             JSON.parse(
-                execFileSync(npm, ['pack', '--json'], {
+                execFileSync(npm, npmArguments(['pack', '--json']), {
                     cwd: root,
                     encoding: 'utf8',
                     stdio: ['ignore', 'pipe', 'pipe']
@@ -31,7 +32,7 @@ try {
     const tarball = suppliedTarball ? resolve(suppliedTarball) : join(root, packed.filename)
 
     writeFileSync(join(project, 'package.json'), JSON.stringify({private: true, type: 'module'}, null, 2))
-    run(npm, ['install', '--ignore-scripts', tarball, 'typescript@6.0.3'])
+    run(npm, npmArguments(['install', '--ignore-scripts', tarball, 'typescript@6.0.3']))
 
     const node = process.env.GOFER_TEST_NODE ?? process.execPath
     const importTest = join(project, 'import-test.mjs')
