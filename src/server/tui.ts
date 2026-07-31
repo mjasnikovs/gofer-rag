@@ -31,7 +31,7 @@ export async function startTui(): Promise<void> {
             continue
         }
         console.log(`\n${result.answer}\n`)
-        console.log(`sources: ${result.sources!.map(s => s.chapter).join('; ')}\n`)
+        console.log(`sources: ${result.sources.map(s => s.chapter).join('; ')}\n`)
     }
 
     rl.close()

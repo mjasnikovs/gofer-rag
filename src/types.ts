@@ -31,12 +31,18 @@ export type Source = {
     score: number
 }
 
-export type QueryResult = {
-    found: boolean
-    answer?: string
-    message?: string
-    sources?: Source[]
+export type QuerySuccess = {
+    found: true
+    answer: string
+    sources: Source[]
 }
+
+export type QueryNotFound = {
+    found: false
+    message: string
+}
+
+export type QueryResult = QuerySuccess | QueryNotFound
 
 export type ModelDownload = {
     name: string

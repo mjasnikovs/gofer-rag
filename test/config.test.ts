@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, test} from 'bun:test'
 import {join} from 'node:path'
 import {configure, defaultCacheDir, getOptions, resetConfiguration} from '../src/config'
+import type {GoferOptions} from '../src/types'
 
 const originalEnvironment = {...process.env}
 
@@ -57,5 +58,20 @@ describe('runtime configuration', () => {
         resetConfiguration()
         process.env.GOFER_RAG_ALLOW_MODEL_DOWNLOADS = 'maybe'
         expect(() => getOptions()).toThrow('must be one of')
+    })
+
+    test('rejects invalid programmatic option shapes and value types at runtime', () => {
+        expect(() => configure(null as unknown as GoferOptions)).toThrow('options must be an object')
+        expect(() => configure([] as unknown as GoferOptions)).toThrow('options must be an object')
+        expect(() => configure({unknownOption: true} as unknown as GoferOptions)).toThrow(
+            'unknown option: unknownOption'
+        )
+        expect(() => configure({cacheDir: 42} as unknown as GoferOptions)).toThrow('cacheDir must be a string')
+        expect(() => configure({allowModelDownloads: 'false'} as unknown as GoferOptions)).toThrow(
+            'allowModelDownloads must be a boolean or consent callback'
+        )
+        expect(() => configure({onDownloadProgress: true} as unknown as GoferOptions)).toThrow(
+            'onDownloadProgress must be a function'
+        )
     })
 })

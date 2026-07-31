@@ -8,7 +8,9 @@ export type {
     GoferOptions,
     ModelDownload,
     ModelDownloadConsent,
+    QueryNotFound,
     QueryResult,
+    QuerySuccess,
     RankedChunk,
     Source
 } from './types.js'

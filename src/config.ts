@@ -4,6 +4,14 @@ import {fileURLToPath} from 'node:url'
 import type {GoferOptions, ResolvedGoferOptions} from './types.js'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const optionNames = new Set<string>([
+    'cacheDir',
+    'databasePath',
+    'llmBaseUrl',
+    'llmModel',
+    'allowModelDownloads',
+    'onDownloadProgress'
+])
 
 export function defaultCacheDir(platform: NodeJS.Platform = process.platform, home = homedir()): string {
     const override = process.env.GOFER_RAG_CACHE_DIR
@@ -41,6 +49,7 @@ function environmentBoolean(name: string): boolean | undefined {
 let programmaticOptions: GoferOptions = {}
 
 export function configure(options: GoferOptions = {}): ResolvedGoferOptions {
+    validateOptions(options)
     const previous = programmaticOptions
     programmaticOptions = {...programmaticOptions, ...options}
     try {
@@ -49,6 +58,33 @@ export function configure(options: GoferOptions = {}): ResolvedGoferOptions {
         programmaticOptions = previous
         throw error
     }
+}
+
+function validateOptions(options: unknown): asserts options is GoferOptions {
+    if (options === null || typeof options !== 'object' || Array.isArray(options))
+        throw new TypeError('options must be an object')
+
+    for (const name of Reflect.ownKeys(options)) {
+        if (typeof name !== 'string' || !optionNames.has(name)) throw new TypeError(`unknown option: ${String(name)}`)
+    }
+
+    const values = options as Record<string, unknown>
+    validateOptionalString('cacheDir', values.cacheDir)
+    validateOptionalString('databasePath', values.databasePath)
+    validateOptionalString('llmBaseUrl', values.llmBaseUrl)
+    validateOptionalString('llmModel', values.llmModel)
+
+    const consent = values.allowModelDownloads
+    if (consent !== undefined && typeof consent !== 'boolean' && typeof consent !== 'function')
+        throw new TypeError('allowModelDownloads must be a boolean or consent callback')
+
+    const progress = values.onDownloadProgress
+    if (progress !== undefined && typeof progress !== 'function')
+        throw new TypeError('onDownloadProgress must be a function')
+}
+
+function validateOptionalString(name: keyof GoferOptions, value: unknown): void {
+    if (value !== undefined && typeof value !== 'string') throw new TypeError(`${name} must be a string`)
 }
 
 export function resetConfiguration(): void {
