@@ -1,21 +1,21 @@
 {
     "generatedAt": "2026-07-31",
-    "command": "npm pack --json; tar -tvzf mjasnikovs-gofer-rag-0.1.0-canary.0.tgz",
-    "package": "@mjasnikovs/gofer-rag@0.1.0-canary.0",
-    "filename": "mjasnikovs-gofer-rag-0.1.0-canary.0.tgz",
-    "tarballSize": 39554830,
-    "unpackedSize": 48611218,
-    "installedPackageSize": 48611218,
+    "command": "npm pack --json; tar -tvzf mjasnikovs-gofer-rag-0.1.0-canary.1.tgz",
+    "package": "@mjasnikovs/gofer-rag@0.1.0-canary.1",
+    "filename": "mjasnikovs-gofer-rag-0.1.0-canary.1.tgz",
+    "tarballSize": 39555143,
+    "unpackedSize": 48612753,
+    "installedPackageSize": 48612753,
     "entryCount": 41,
-    "shasum": "1da497d8c3e9f4e2535ce28bb1479c3556769859",
-    "integrity": "sha512-uAV83T/7qjn0H5M4UpNIG1UCI8p6dL924ZBfQFAlK2NRh3Nnmkkfu6RwJ53MU1/DMAxEQEzpAbaopa00I7hrGw==",
-    "verifiedNodeVersions": ["v22.18.0", "v26.2.0"],
+    "shasum": "a0b2bb658bb85ab0aa2cb1bc004aec76cb8b7143",
+    "integrity": "sha512-gzy4WWow0VZnW6yP3oi2WOlvc/w8hXgttBGqglmxusYzL0T67Q20mjTrw83YWaMKfbg4koS7EysjzQOWhN+sdw==",
+    "verifiedNodeVersions": ["v22.23.2", "v26.2.0"],
     "registry": {
         "url": "https://registry.npmjs.org/",
-        "tarballUrl": "https://registry.npmjs.org/@mjasnikovs/gofer-rag/-/gofer-rag-0.1.0-canary.0.tgz",
+        "tarballUrl": "https://registry.npmjs.org/@mjasnikovs/gofer-rag/-/gofer-rag-0.1.0-canary.1.tgz",
         "requestedTag": "canary",
         "distTags": {
-            "canary": "0.1.0-canary.0",
+            "canary": "0.1.0-canary.1",
             "latest": "0.1.0-canary.0"
         },
         "published": true
@@ -127,7 +127,7 @@
         },
         {
             "path": "dist/config.js",
-            "size": 4598
+            "size": 6002
         },
         {
             "path": "dist/core/query.d.ts",
@@ -139,7 +139,7 @@
         },
         {
             "path": "dist/index.d.ts",
-            "size": 477
+            "size": 506
         },
         {
             "path": "dist/index.js",
@@ -155,7 +155,7 @@
         },
         {
             "path": "dist/types.d.ts",
-            "size": 1372
+            "size": 1474
         },
         {
             "path": "dist/types.js",
