@@ -48,6 +48,15 @@ async function run(cmd: string[], env: Record<string, string> = {}): Promise<num
 
 // Look at every GPU; return the free-VRAM ordering (roomiest first) if the best
 // card clears the bar, else null. null means "embed on CPU".
+//
+// Only the winner is exposed to the container. Exposing both and letting the
+// runtime "place" the model does not place it — llama.cpp splits it across
+// every visible device, and a 639 MB model split two ways is pure overhead:
+// with CUDA_VISIBLE_DEVICES=1,0 the 4070 SUPER carried 3.7 GB at 64% util
+// while the roomier, faster 5070 Ti sat at 1.6 GB and 5%, and the corpus
+// embedded at ~470 chunks/min instead of the ~1800 the single-card path gets
+// (measured 2026-08-06). PCI_BUS_ID is still load-bearing: without it CUDA
+// enumerates fastest-first and the index here selects the wrong card.
 function pickGpus(): {order: string; note: string} | null {
     const smi = sh(['nvidia-smi', '--query-gpu=index,memory.free', '--format=csv,noheader,nounits'])
     if (!smi.ok || !smi.out) return null
@@ -60,7 +69,7 @@ function pickGpus(): {order: string; note: string} | null {
         .sort((a, b) => b.free - a.free)
     const best = gpus[0]!
     if (best.free < MIN_FREE_MIB) return null
-    return {order: gpus.map(g => g.idx).join(','), note: `GPU ${best.idx} has ${best.free} MiB free`}
+    return {order: String(best.idx), note: `GPU ${best.idx} has ${best.free} MiB free`}
 }
 
 // Embedding runs only in the container. If Docker is missing there's no box.
@@ -93,7 +102,7 @@ if (gpu)
     banner([
         'Embedding on GPU in the stock llama.cpp box — the fast path (~5min full corpus).',
         gpu.note,
-        `both GPUs exposed; model placed on the roomiest (CUDA_VISIBLE_DEVICES=${gpu.order})`
+        `that card only, so the model is not split across GPUs (CUDA_VISIBLE_DEVICES=${gpu.order})`
     ])
 else
     banner([

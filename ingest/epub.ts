@@ -21,6 +21,22 @@ type EpubDoc = {
     getChapterAsync(chapterId: string): Promise<string>
 }
 
+// 62 of the 1677 spine items carry no title (measured 2026-08-06), and the old
+// href fallback turned those into chapter labels like
+// "tutorials/scripting/c_sharp/c_sharp_signals.xhtml". A path is not a title:
+// matchedTitles()/titleSearch() key on chapter titles appearing verbatim in a
+// question, so those 62 chapters were unreachable by name — no user types a
+// file path. Every one of them has a clean <h1> ("Creating a 3D particle
+// system", "Particle turbulence", ...), which is the title the docs themselves
+// use. Preferred only when the spine has none, so the 1615 already-titled
+// chapters keep their existing labels and the corpus doesn't drift.
+function headingTitle(html: string): string | null {
+    const match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
+    if (!match) return null
+    const text = htmlToText(match[1]!).replace(/\s+/g, ' ').trim()
+    return text.length > 0 && text.length <= 120 ? text : null
+}
+
 export async function readChapters(): Promise<Chapter[]> {
     const epub = (await EPub.createAsync(config.epubPath)) as unknown as EpubDoc
     const chapters: Chapter[] = []
@@ -30,7 +46,8 @@ export async function readChapters(): Promise<Chapter[]> {
         const html = await epub.getChapterAsync(item.id)
         const text = htmlToText(html)
         if (text.length < 40) continue // skip empty / nav-only pages
-        chapters.push({title: item.title ?? item.href ?? item.id, href: item.href ?? '', order: order++, text})
+        const title = item.title ?? headingTitle(html) ?? item.href ?? item.id
+        chapters.push({title, href: item.href ?? '', order: order++, text})
     }
     return chapters
 }

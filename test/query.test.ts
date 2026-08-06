@@ -155,7 +155,7 @@ describe('query orchestration', () => {
         )
 
         expect(reranked).toBeFalse()
-        expect(result).toEqual({candidates: [], expansion: '', kept: []})
+        expect(result).toEqual({candidates: [], expansion: '', kept: [], scored: []})
     })
 
     test('reranks against the expanded question', async () => {

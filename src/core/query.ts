@@ -97,7 +97,33 @@ export function rankCandidates(
         .map((candidate, i) => ({...candidate, score: scores[i]!}))
         .sort((a, b) => b.score - a.score)
         .filter(candidate => candidate.score >= config.rerankThreshold)
-    const kept = ranked.slice(0, config.rerankKeep)
+
+    // One chunk per chapter, unless the question named that chapter. Five slots
+    // are all the answer LLM gets, and two chunks of the same reference page
+    // spend two of them on one source: "How do I connect a signal to a method
+    // in GDScript?" kept Object twice and pushed "Using signals" to rank 5 of 5
+    // (measured 2026-08-06). A question that NAMES a chapter is the opposite
+    // case — an entity question wants its class page's intro AND the chunk
+    // documenting the member — so named chapters are exempt. Measured over 225
+    // captured pools, paired, no LLM in the loop:
+    //
+    //   no cap (before)          fundamentals 13/20, hand 53/60, class-ref 116/120
+    //   cap every chapter at 1   fundamentals 14/20, hand 54/60, class-ref 105/120
+    //   cap every chapter at 2   fundamentals 14/20, hand 53/60, class-ref 110/120
+    //   cap only unnamed at 1    fundamentals 14/20, hand 54/60, class-ref 116/120
+    //
+    // The blanket caps pay for the same two gains with 6–11 class-ref losses
+    // (offset_top of Control, get_nodes_in_group of SceneTree, ...) — all of
+    // them the second chunk of the named class's own page. Refusals (3/5 and
+    // 18/20) are identical in every arm and untouched by construction: a cap
+    // can only replace a kept chunk with a different one, never empty the set.
+    const named = new Set(titles)
+    const kept: RankedChunk[] = []
+    for (const candidate of ranked) {
+        if (kept.length >= config.rerankKeep) break
+        if (kept.some(k => k.chapter === candidate.chapter) && !named.has(candidate.chapter)) continue
+        kept.push(candidate)
+    }
 
     const symbols = symbolTokens(question)
     for (const title of [...titles].sort((a, b) => b.length - a.length).slice(0, 3)) {
@@ -114,6 +140,11 @@ export type RetrievalDetail = {
     candidates: StoredChunk[]
     expansion: string
     kept: RankedChunk[]
+    // Every candidate the reranker actually scored, best first. The two-stage
+    // rerank leaves prefilter-dropped candidates at -Infinity; those are
+    // excluded. eval-fundamentals reads this to measure the margin between the
+    // expected chapter and the next candidate under it.
+    scored: RankedChunk[]
 }
 
 // Retrieve + rerank, keeping only passages above the relevance threshold.
@@ -134,7 +165,7 @@ export async function retrieveDetailed(
     dependencies: QueryDependencies = defaultDependencies
 ): Promise<RetrievalDetail> {
     const {candidates, expansion, titles} = await gatherCandidates(question, dependencies)
-    if (candidates.length === 0) return {candidates, expansion, kept: []}
+    if (candidates.length === 0) return {candidates, expansion, kept: [], scored: []}
     const scores = await dependencies.rerank(
         expansion ? `${question} ${expansion}` : question,
         candidates.map(c => c.text)
@@ -150,7 +181,15 @@ export async function retrieveDetailed(
     // Refusals are untouched by construction: an above-threshold chunk outside
     // kept can only exist when kept is already full. Same top-3-longest-titles
     // cap as titleSearch.
-    return {candidates, expansion, kept: rankCandidates(question, candidates, scores, titles)}
+    return {
+        candidates,
+        expansion,
+        kept: rankCandidates(question, candidates, scores, titles),
+        scored: candidates
+            .map((candidate, i) => ({...candidate, score: scores[i]!}))
+            .filter(candidate => Number.isFinite(candidate.score))
+            .sort((a, b) => b.score - a.score)
+    }
 }
 
 export async function retrieve(
