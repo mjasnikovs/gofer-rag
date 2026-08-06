@@ -8,7 +8,7 @@ documentation. Bun is used for repository development and ingestion, but is not 
 ## Install
 
 ```sh
-npm install @mjasnikovs/gofer-rag@canary
+npm install @mjasnikovs/gofer-rag
 ```
 
 Node.js 22 or newer is required.

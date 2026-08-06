@@ -1,6 +1,6 @@
 {
     "name": "@mjasnikovs/gofer-rag",
-    "version": "0.1.0-canary.3",
+    "version": "0.1.0",
     "description": "Local retrieval and grounded answers over the Godot Engine 4.7 documentation",
     "license": "MIT",
     "type": "module",
@@ -33,8 +33,7 @@
         "NOTICE-DATA.md"
     ],
     "publishConfig": {
-        "access": "public",
-        "tag": "canary"
+        "access": "public"
     },
     "packageManager": "bun@1.3.14",
     "devDependencies": {
@@ -56,8 +55,8 @@
         "pack:dry-run": "npm run build && npm pack --dry-run --json",
         "pack:verify": "npm run build && node scripts/test-package.mjs",
         "test:package": "node scripts/test-package.mjs",
-        "format": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'release/*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml'",
-        "check": "prettier --check 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'release/*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml' && eslint . && tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
+        "format": "prettier --log-level warn --write 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml'",
+        "check": "prettier --check 'src/**/*.ts' 'ingest/*.ts' 'test/**/*.ts' 'scripts/**/*.mjs' '*.json' 'README.md' 'NOTICE-DATA.md' '.github/**/*.yml' && eslint . && tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
         "lint": "bun run format && eslint --fix . && tsc --noEmit",
         "eval:retrieval": "bun run scripts/eval-retrieval.ts",
         "eval:paraphrase": "bun run scripts/eval-paraphrase.ts",
