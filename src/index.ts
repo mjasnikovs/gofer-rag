@@ -18,20 +18,20 @@ export type {
 export async function retrieve(question: string, options: GoferOptions = {}): Promise<RankedChunk[]> {
     const normalized = validateQuestion(question)
     configure(options)
-    await authorizeModelDownloads(['embedder', 'reranker'])
+    await authorizeModelDownloads(['embedder', 'reranker', 'prefilter'])
     return retrieveCore(normalized)
 }
 
 export async function query(question: string, options: GoferOptions = {}): Promise<QueryResult> {
     const normalized = validateQuestion(question)
     configure(options)
-    await authorizeModelDownloads(['embedder', 'reranker'])
+    await authorizeModelDownloads(['embedder', 'reranker', 'prefilter'])
     return queryCore(normalized)
 }
 
 export async function warmup(options: GoferOptions = {}): Promise<void> {
     configure(options)
-    await authorizeModelDownloads(['embedder', 'reranker'])
+    await authorizeModelDownloads(['embedder', 'reranker', 'prefilter'])
     await warmupCore()
 }
 

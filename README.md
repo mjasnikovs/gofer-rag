@@ -38,7 +38,8 @@ calls an OpenAI-compatible local chat-completions endpoint. Importing the packag
 
 Programmatic calls never prompt. On first use, callers must set `allowModelDownloads: true` or provide a consent
 callback. Without consent, the call fails before downloading and reports model names, sources, destinations, and
-expected sizes. The two runtime models require approximately 1.13 GiB and 0.55 GiB. Cached models require no consent.
+expected sizes. The three runtime models require approximately 1.13 GiB, 0.55 GiB and 0.02 GiB. Cached models require no
+consent.
 
 The default cache is the operating system's user cache directory:
 

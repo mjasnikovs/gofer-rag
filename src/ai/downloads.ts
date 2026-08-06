@@ -17,7 +17,7 @@ type TransformerProgress = {
     progress?: number
 }
 
-const definitions: Record<'embedder' | 'reranker', ModelDefinition> = {
+const definitions: Record<'embedder' | 'reranker' | 'prefilter', ModelDefinition> = {
     embedder: {
         id: config.embedModel,
         expectedBytes: 1_211_945_830,
@@ -26,6 +26,11 @@ const definitions: Record<'embedder' | 'reranker', ModelDefinition> = {
     reranker: {
         id: config.rerankModel,
         expectedBytes: 587_812_045,
+        requiredFiles: ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']
+    },
+    prefilter: {
+        id: config.prefilterModel,
+        expectedBytes: 23_856_961,
         requiredFiles: ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']
     }
 }

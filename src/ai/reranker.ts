@@ -15,35 +15,38 @@ import {config, getOptions} from '../config.js'
 import {authorizeModelDownload, progressCallback} from './downloads.js'
 
 type LoadedReranker = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
+type Stage = 'reranker' | 'prefilter'
 
 const loadedRerankers = new Map<string, LoadedReranker>()
 
-async function load(): Promise<LoadedReranker> {
+async function load(stage: Stage): Promise<LoadedReranker> {
     const {cacheDir} = getOptions()
-    const cached = loadedRerankers.get(cacheDir)
+    const key = `${stage}:${cacheDir}`
+    const cached = loadedRerankers.get(key)
     if (cached) return cached
-    await authorizeModelDownload('reranker')
-    const progress = progressCallback('reranker')
-    const tokenizer = await AutoTokenizer.from_pretrained(config.rerankModel, {
+    await authorizeModelDownload(stage)
+    const progress = progressCallback(stage)
+    const id = stage === 'reranker' ? config.rerankModel : config.prefilterModel
+    const tokenizer = await AutoTokenizer.from_pretrained(id, {
         cache_dir: cacheDir,
         progress_callback: progress
     })
-    const model = await AutoModelForSequenceClassification.from_pretrained(config.rerankModel, {
-        dtype: config.rerankDtype,
+    const model = await AutoModelForSequenceClassification.from_pretrained(id, {
+        dtype: stage === 'reranker' ? config.rerankDtype : config.prefilterDtype,
         device: config.device,
         cache_dir: cacheDir,
         progress_callback: progress
     })
     const loaded = {tokenizer, model}
-    loadedRerankers.set(cacheDir, loaded)
+    loadedRerankers.set(key, loaded)
     return loaded
 }
 
-// Warm the model so the first real request isn't slow. When a rerank box is
-// configured the ONNX model is never used — don't load it.
+// Warm the models so the first real request isn't slow. When a rerank box is
+// configured neither ONNX model is used — don't load them.
 export async function loadReranker(): Promise<void> {
     if (config.rerankUrl) return
-    await load()
+    await Promise.all([load('reranker'), load('prefilter')])
 }
 
 type SequenceClassifierOutput = {
@@ -70,16 +73,71 @@ async function rerankViaBox(query: string, passages: string[]): Promise<number[]
     return scores
 }
 
+// Score passages in length-sorted batches of config.rerankBatch. Every pair in
+// a batch is padded to the longest one, so one big batch pays for padding it
+// does not need — the same reason ingest embeds shortest-first.
+async function score(
+    stage: Stage,
+    query: string,
+    passages: string[],
+    indices: number[],
+    batchSize: number
+): Promise<number[]> {
+    const {tokenizer: tok, model: mdl} = await load(stage)
+    const order = [...indices].sort((a, b) => passages[a]!.length - passages[b]!.length)
+    const scores = new Array<number>(passages.length).fill(-Infinity)
+    for (let start = 0; start < order.length; start += batchSize) {
+        const batch = order.slice(start, start + batchSize)
+        const inputs = tok(new Array<string>(batch.length).fill(query), {
+            text_pair: batch.map(i => passages[i]!),
+            padding: true,
+            truncation: true
+        })
+        const output = (await mdl(inputs)) as unknown as SequenceClassifierOutput
+        output.logits.tolist().forEach((row, k) => (scores[batch[k]!] = row[0]!))
+    }
+    return scores
+}
+
 // Returns one relevance logit per passage, in the same order as the input.
+//
+// Two stages: ms-marco-MiniLM-L-6-v2 (23 MB, 22M params) skims the whole pool
+// in ~0.7s and forwards its top config.prefilterKeep to bge-reranker-v2-m3,
+// which does the scoring that counts. Passages the prefilter drops score
+// -Infinity — they are rejected, and the threshold in rankCandidates treats
+// them as such.
+//
+// Measured 2026-08-06, both arms over identical captured pools (no LLM in the
+// loop, so expansion nondeterminism can't muddy the comparison). The final
+// logits are still bge's, so rerankThreshold needed no recalibration.
+//
+//   65 hand-written eval pools   18.16s → 5.52s   55/60 hits, 3/5 refusals in
+//                                                 BOTH arms — zero questions
+//                                                 flipped either way
+//   140 class-ref pools          21.8s  → 4.99s   115/120 vs 117/120 hits,
+//                                                 14/20 refusals in both
+//
+// The two it loses are "What does the X node do?" for AnimationNodeAdd2 and
+// Path3D. Forwarding more candidates does not buy them back: prefilterKeep 12
+// scores 116/120 but refuses one fewer off-topic question, and 14 scores
+// 115/120 refusing two fewer — non-monotonic, because widening the second
+// stage changes its batch and every quantized score with it. 10 is the value
+// that matches the old refusal behaviour at the lowest cost.
 export async function rerank(query: string, passages: string[]): Promise<number[]> {
     if (passages.length === 0) return []
+    // The rerank box is a GPU already doing this in under a second — sending it
+    // through a CPU prefilter first would only slow it down.
     if (config.rerankUrl) return rerankViaBox(query, passages)
-    const {tokenizer: tok, model: mdl} = await load()
-    const inputs = tok(new Array<string>(passages.length).fill(query), {
-        text_pair: passages,
-        padding: true,
-        truncation: true
-    })
-    const output = (await mdl(inputs)) as unknown as SequenceClassifierOutput
-    return output.logits.tolist().map(row => row[0]!)
+
+    const all = passages.map((_, i) => i)
+    // The survivors go through in ONE batch: quantized scores shift with batch
+    // composition, and splitting the finalists dropped "Using signals" from the
+    // kept set for "connect a signal to a method" (eval-retrieval 9/10,
+    // measured 2026-08-06). Only the prefilter, which reads the long pool, is
+    // batched — it decides membership, not the final order.
+    if (passages.length <= config.prefilterKeep) return score('reranker', query, passages, all, passages.length)
+
+    const cheap = await score('prefilter', query, passages, all, config.rerankBatch)
+    const survivors = all.sort((a, b) => cheap[b]! - cheap[a]!).slice(0, config.prefilterKeep)
+    return score('reranker', query, passages, survivors, survivors.length)
 }

@@ -122,8 +122,10 @@ export const config = {
     table: 'chunks',
     embedModel: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
     rerankModel: 'onnx-community/bge-reranker-v2-m3-ONNX',
+    prefilterModel: 'Xenova/ms-marco-MiniLM-L-6-v2',
     embedDtype: (process.env.RAG_DTYPE ?? 'fp16') as 'q8' | 'fp16' | 'fp32',
     rerankDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
+    prefilterDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
     embedDims: 1024,
     device: (process.env.RAG_DEVICE ?? 'cpu') as 'cpu' | 'cuda' | 'auto',
     embedGgufPath: '.models/gguf/Qwen3-Embedding-0.6B-Q8_0.gguf',
@@ -142,6 +144,13 @@ export const config = {
     titleTopK: 8,
     rerankKeep: 5,
     rerankThreshold: -4,
+    // Pairs per rerank forward pass. Every pair in a batch is padded to the
+    // longest one, so a single 34-pair batch computes 1.38x the tokens it needs
+    // (measured over 1091 pairs). Length-sorted batches of 4 cut that to 1.04x.
+    rerankBatch: 4,
+    // Candidates the cheap prefilter forwards to the real reranker. 10 keeps
+    // every eval result identical; 6 starts losing them (see rerank()).
+    prefilterKeep: 10,
     notFoundMessage: "I don't have that information in the Godot documentation.",
     get llmBaseUrl(): string {
         return getOptions().llmBaseUrl
