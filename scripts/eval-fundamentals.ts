@@ -17,11 +17,38 @@
 // pairs), which is exactly why "present at rank 5" is not a result worth
 // shipping and 0.5 is the floor.
 //
-//   bun run scripts/eval-fundamentals.ts             quiet: failures + summary line
-//   bun run scripts/eval-fundamentals.ts --verbose   every question, rank, margin, kept set
+// A SINGLE PASS OF THIS EVAL CANNOT GRADE A CORPUS CHANGE. Three runs on one
+// unchanged database scored 10, 8 and 9 while top-3 held at 16/20 and present
+// at 18/20 every time (2026-08-12, in-process CPU rerank). Both noise sources
+// land on the margin: expansion is nondeterministic, so the pool differs, and
+// the reranker is not batch-invariant, so the logits differ. Failing margins
+// cluster at 0.02-0.48 — inside the 0.23 mean delta — so the gate is finer
+// than its own instrument on any one run.
+//
+// So every question is measured REPEATS times and scored on the MEDIAN rank and
+// MEDIAN margin. Both readings survive (see the note below on judging a fix on
+// rank AND margin); only the coin-flip goes away.
+//
+// How much it buys, measured on one unchanged database through the GPU box:
+//
+//   repeats 1   8, 8, 9, 9, 9     spread 1
+//   repeats 3   8, 9, 9           spread 1
+//   repeats 7   9, 9              spread 0
+//
+// The default 3 is a quick check. GRADE AN ARM AT --repeats 7. And note that
+// top-3 (15/20) and present (17/20) were identical in every single one of those
+// runs — they need no repeating, which is exactly why they are the readings to
+// trust when the score wobbles.
+//
+//   bun run scripts/eval-fundamentals.ts               quiet: failures + summary line
+//   bun run scripts/eval-fundamentals.ts --verbose     every question, rank, margin, kept set
+//   bun run scripts/eval-fundamentals.ts --repeats 5   more passes per question
+//   bun run scripts/eval-fundamentals.ts --repeats 1   old single-pass behaviour, do not ship on it
 //
 // Needs the llama.cpp server up (docker start llama-turboquant) — most of these
 // questions name no chapter title, so they go through LLM query expansion.
+// Wrap it in scripts/rerank-box.ts; at REPEATS 3 the in-process CPU reranker
+// turns a 4-minute eval into a 12-minute one, the GPU box into 90 seconds.
 
 import {loadEmbedder} from '../src/ai/embedder'
 import {loadReranker} from '../src/ai/reranker'
@@ -87,13 +114,18 @@ const FUNDAMENTALS_MIN = 12
 
 const argv = process.argv.slice(2)
 const verbose = argv.includes('--verbose')
+const repeatsArgument = argv[argv.indexOf('--repeats') + 1]
+const REPEATS = argv.includes('--repeats') && Number(repeatsArgument) > 0 ? Number(repeatsArgument) : 3
 
 if (verbose) console.log('Loading models ...')
 await Promise.all([loadEmbedder(), loadReranker(), loadTable()])
 
+type Score = {rank: number; margin: number}
+type Pass = Score & {kept: RankedChunk[]}
+
 // Rank of the expected chapter within kept (1-based, -1 = absent) and its lead
 // over the first candidate below it that is NOT from an expected chapter.
-function score(expect: RegExp, kept: RankedChunk[], scored: RankedChunk[]): {rank: number; margin: number} {
+function score(expect: RegExp, kept: RankedChunk[], scored: RankedChunk[]): Score {
     const rank = kept.findIndex(c => expect.test(c.chapter))
     if (rank === -1) return {rank: -1, margin: -Infinity}
     const hit = kept[rank]!
@@ -102,15 +134,37 @@ function score(expect: RegExp, kept: RankedChunk[], scored: RankedChunk[]): {ran
     return {rank: rank + 1, margin: next ? hit.score - next.score : Infinity}
 }
 
+// Lower half on an even count, so 2 of 4 absences read as absent rather than
+// being averaged into a rank that never happened.
+function median(values: number[]): number {
+    return [...values].sort((a, b) => a - b)[Math.floor((values.length - 1) / 2)]!
+}
+
+// Rank and margin are taken independently: they are two readings of the same
+// run, and the question is "where does this land typically", not "which single
+// run was typical". Absent (-1) sorts as worst, not best.
+function medianScore(passes: Score[]): Score {
+    const ABSENT = Number.MAX_SAFE_INTEGER
+    const rank = median(passes.map(p => (p.rank === -1 ? ABSENT : p.rank)))
+    return {rank: rank === ABSENT ? -1 : rank, margin: median(passes.map(p => p.margin))}
+}
+
 let passes = 0
 let present = 0
 let inTopN = 0
 let ms = 0
 for (const c of cases) {
-    const t0 = performance.now()
-    const {kept, scored} = await retrieveDetailed(c.question)
-    ms += performance.now() - t0
-    const {rank, margin} = score(c.expect, kept, scored)
+    const attempts: Pass[] = []
+    for (let i = 0; i < REPEATS; i++) {
+        const t0 = performance.now()
+        const {kept, scored} = await retrieveDetailed(c.question)
+        ms += performance.now() - t0
+        attempts.push({...score(c.expect, kept, scored), kept})
+    }
+    const {rank, margin} = medianScore(attempts)
+    // Show the run whose margin IS the median, so the printed kept set is a
+    // real result rather than a blend of several.
+    const kept = (attempts.find(a => a.margin === margin) ?? attempts[0]!).kept
     const pass = rank !== -1 && rank <= TOP_N && margin >= MIN_MARGIN
     if (rank !== -1) present++
     if (rank !== -1 && rank <= TOP_N) inTopN++
@@ -125,9 +179,9 @@ for (const c of cases) {
 
 if (verbose) {
     console.log('\n=== summary ===')
-    console.log(`in kept at all: ${present}/${cases.length}   in top-${TOP_N}: ${inTopN}/${cases.length}   top-${TOP_N} with margin >= ${MIN_MARGIN}: ${passes}/${cases.length}   retrieve mean ${(ms / cases.length / 1000).toFixed(1)}s`)
+    console.log(`in kept at all: ${present}/${cases.length}   in top-${TOP_N}: ${inTopN}/${cases.length}   top-${TOP_N} with margin >= ${MIN_MARGIN}: ${passes}/${cases.length}   retrieve mean ${(ms / cases.length / REPEATS / 1000).toFixed(1)}s`)
 }
 
 const ok = passes >= FUNDAMENTALS_MIN
-console.log(`fundamentals: ${ok ? 'PASS' : 'FAIL'}  ${passes}/${cases.length} top-${TOP_N} margin>=${MIN_MARGIN} (min ${FUNDAMENTALS_MIN}; top-${TOP_N} ${inTopN}/${cases.length}; present ${present}/${cases.length}; target 18)`)
+console.log(`fundamentals: ${ok ? 'PASS' : 'FAIL'}  ${passes}/${cases.length} top-${TOP_N} margin>=${MIN_MARGIN} median of ${REPEATS} (min ${FUNDAMENTALS_MIN}; top-${TOP_N} ${inTopN}/${cases.length}; present ${present}/${cases.length}; target 18)`)
 process.exit(ok ? 0 : 1)
