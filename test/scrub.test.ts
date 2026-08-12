@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {dropCsharpTabs, namesCsharp} from '../ingest/scrub'
+import {dropBracketedUrls, dropCsharpTabs, namesCsharp} from '../ingest/scrub'
 
 describe('dropCsharpTabs', () => {
     test('drops the C# half of a tab pair and keeps the GDScript half', () => {
@@ -54,6 +54,55 @@ describe('dropCsharpTabs', () => {
         const text = 'A paragraph mentioning C# inline stays exactly as written.'
 
         expect(dropCsharpTabs(text)).toBe(text)
+    })
+})
+
+describe('dropBracketedUrls', () => {
+    test('drops the target and keeps the link text', () => {
+        const text = 'Talk to us on the Godot Contributors Chat [https://chat.godotengine.org/]!'
+
+        expect(dropBracketedUrls(text)).toBe('Talk to us on the Godot Contributors Chat!')
+    })
+
+    // Blank lines are the paragraph separator splitToBudget() splits on.
+    // Dropping them collapses a chapter into one paragraph and sends the whole
+    // corpus down the hard-split path.
+    test('keeps blank lines that were already blank', () => {
+        const text = 'First paragraph.\n\nSecond paragraph [https://example.com/x].\n\nThird paragraph.'
+
+        expect(dropBracketedUrls(text)).toBe('First paragraph.\n\nSecond paragraph.\n\nThird paragraph.')
+    })
+
+    test('removes a line that was nothing but a URL', () => {
+        const text = [
+            'Offline documentation',
+            '[https://hosted.weblate.org/engage/godot-engine/]',
+            'Next section'
+        ].join('\n')
+
+        expect(dropBracketedUrls(text)).toBe(['Offline documentation', 'Next section'].join('\n'))
+    })
+
+    test('leaves inline code and bracketed non-URLs alone', () => {
+        const text = 'Use get_node("[Player]") and see @GlobalScope_MouseButton for the list.'
+
+        expect(dropBracketedUrls(text)).toBe(text)
+    })
+
+    // Cutting only the target would leave "Please help us by contributing one!",
+    // which is worse than the sentence it came from. The phrase goes whole.
+    test('removes the whole no-description sentence, not just its URL', () => {
+        const text =
+            'EXPORT_ALL_RESOURCES = 0\nThere is currently no description for this enum. Please help us by contributing one [https://contributing.godotengine.org/x.html]!'
+
+        expect(dropBracketedUrls(text)).toBe('EXPORT_ALL_RESOURCES = 0')
+    })
+
+    // The issue number alone carries nothing once its link is gone.
+    test('removes a bare GH issue reference whole', () => {
+        const text = 'Fixed a regression in the tile editor. GH-80813 [https://github.com/godotengine/godot/pull/80813]'
+
+        expect(dropBracketedUrls(text)).toBe('Fixed a regression in the tile editor.')
     })
 })
 

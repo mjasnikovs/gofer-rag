@@ -35,6 +35,18 @@ describe('chunkChapter', () => {
         expect(chunks[1]!.text).toContain('b')
     })
 
+    // Half a surrogate pair is not valid JSON, and the embedding box rejects
+    // the whole batch when one reaches it.
+    test('never hard-splits through a surrogate pair', () => {
+        // Place an emoji so the pair straddles the exact budget boundary.
+        const text = `${'x'.repeat(config.chunkChars - 1)}🤗${'y'.repeat(config.chunkChars)}`
+        const chunks = chunkChapter(chapter(text))
+
+        for (const chunk of chunks) {
+            expect(chunk.text).toBe(chunk.text.toWellFormed())
+        }
+    })
+
     // A paragraph seam copies nothing. Packing never cuts a paragraph, so the
     // old tail copy bought no context and cost 11.87% of the corpus — see the
     // header of ingest/chunk.ts.

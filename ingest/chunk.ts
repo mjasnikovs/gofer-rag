@@ -18,6 +18,16 @@
 import {config} from '../src/config'
 import type {Chapter, Chunk} from '../src/types'
 
+// Never cut between a UTF-16 surrogate pair. The docs carry emoji, and half a
+// pair is not valid JSON: the embedding box rejects the whole batch with
+// "surrogate U+DC00..U+DFFF must follow U+D800..U+DBFF". Latent since the hard
+// split was written — it only fires when a chunk boundary happens to land on an
+// emoji, which changing the chunking makes it do.
+function surrogateSafe(text: string, index: number): number {
+    const previous = text.charCodeAt(index - 1)
+    return previous >= 0xd800 && previous <= 0xdbff ? index - 1 : index
+}
+
 function splitToBudget(text: string, budget: number, overlap: number): string[] {
     const paragraphs = text
         .split(/\n{2,}/)
@@ -33,8 +43,8 @@ function splitToBudget(text: string, budget: number, overlap: number): string[] 
         current = current ? `${current}\n${paragraph}` : paragraph
         // A single paragraph larger than the budget gets hard-split.
         while (current.length > budget * 1.5) {
-            chunks.push(current.slice(0, budget))
-            current = current.slice(budget - overlap)
+            chunks.push(current.slice(0, surrogateSafe(current, budget)))
+            current = current.slice(surrogateSafe(current, budget - overlap))
         }
     }
     if (current.trim()) chunks.push(current)

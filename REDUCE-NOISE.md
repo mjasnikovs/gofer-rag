@@ -19,18 +19,18 @@ the whole list and killed three of the six findings outright.
 | --- | --- | --- | --- |
 | 1. Chunk overlap | 11.87% | 7.47% | **fixed** |
 | 4. C# / GDScript duplication | 2.64% | 7.48% | **fixed** |
-| 3. Bracketed URLs | 2.26% | ~1.1% | open, blocked on a decision |
+| 3. Bracketed URLs | 2.26% | ~1.1% | **fixed** |
+| 2. "No description" boilerplate | 0.92% | 0.00% | **fixed** with finding 3 |
 | 6. Section headers | 0.61% | ~1.3% | open, leave alone |
-| 2. "No description" boilerplate | 0.92% | **0.00%** | dead — never retrieved |
 | 5. Prose-free index chunks | 16.60% | 26% | dead — false positive |
 
 ## Corpus now
 
 | Metric | Before | After |
 | --- | --- | --- |
-| Chunks | 8889 | **7783** |
-| Chars | 13,985,089 | **11,934,969** |
-| Chunk chars min / median / max | 27 / 1726 / 2611 | 27 / 1723 / 2583 |
+| Chunks | 8889 | **7582** |
+| Chars | 13,985,089 | **11,586,313** |
+| Chunk chars min / median / max | 27 / 1726 / 2611 | 27 / 1722 / 2583 |
 | Chapters | 1586 | 1586 |
 
 `chunkChars` 1800, `overlapChars` 240, `rerankKeep` 5.
@@ -81,14 +81,40 @@ purpose is the side-by-side. 25 of the corpus's 894 C# markers sit in such chapt
 The reversible alternative, if this turns out to matter: keep both blocks, tag the block language at ingest, filter at
 serve time by what the question looks like.
 
-## Dead — finding 2, "no description" boilerplate
+## Fixed — finding 3, bracketed URLs (and finding 2 with it)
 
-The Godot class reference stubs unwritten entries with a fixed sentence plus a contributing URL. 755 sentences,
-128,224 chars, 0.92% of the corpus, concentrated in 199 chunks.
+`htmlToText()` keeps every link target inline as `[https://...]`, beside the link text it already kept. 3954 of them,
+316,229 chars, 2.26% of the corpus and ~1.1% of the context.
 
-**0.00% of the LLM context across 50 questions.** The reranker never picks those chunks, because nobody asks a
-question they match. The first draft called this "a cheap win with low blast radius". It is not a win at all. Do not
-spend code on it.
+There was no decision to make. The answer prompt never mentions citations, and `query()` builds its `sources` from
+chapter metadata, not from the passage text. Nothing downstream reads them.
+
+**Cutting the target alone is not enough.** Sampling the text around all 3954 found two shapes where it leaves
+something worse than what was there:
+
+| Count | Shape | What cutting only the URL leaves |
+| --- | --- | --- |
+| 687 | `...no description for this method. Please help us by contributing one [url]!` | `Please help us by contributing one!` |
+| 200+ | `GH-80813 [url]` | `GH-80813` |
+
+Both are removed whole, which is also what finally kills finding 2 — the "no description" boilerplate is the first of
+those shapes. A third shape keeps its text: `Third Person Shooter (TPS) Demo [url]` IS the answer to "is there a demo
+project".
+
+Finding 2 on its own was still not worth code. It measured 0.00% of the LLM context: the reranker never picks those
+chunks, because nobody asks a question they match. It got removed only because it was in the way of finding 3.
+
+### Two bugs found doing this
+
+**Surrogate pairs.** The hard split cut by UTF-16 code unit, so a boundary landing on an emoji produced half a pair.
+That is not valid JSON and the embedding box rejects the entire batch. Latent since the hard split was written; only
+fires when the chunking changes enough to land on one. Fixed in `ingest/chunk.ts`.
+
+**Blank lines are load-bearing.** A first cut of the URL scrub removed every whitespace-only line to clean up lines
+that had held nothing but a link. Blank lines are the paragraph separator `splitToBudget()` splits on, so every
+chapter became one giant paragraph and the whole corpus went down the hard-split path — which legitimately carries
+overlap. Overlap noise went straight back to 6.34% of context and answers grew to 9694 chars. The scrub now works line
+by line and only drops a line that scrubbing emptied.
 
 ## Dead — finding 5, prose-free index chunks
 
@@ -109,43 +135,36 @@ rank 1  [Area2D]  Q: How do I detect when two objects collide?
 The heuristic detects "contains code", not "is noise". Code is the answer to a how-do-I question. The locale-code
 dumps that motivated the finding exist in the corpus but are never retrieved — same reason as finding 2.
 
-## Open — findings 3 and 6, and why they may be ungradable
+## Open — finding 6, section headers
 
-| Finding | Chars | Share of corpus | Share of context |
-| --- | --- | --- | --- |
-| 3. Bracketed URLs | 316,229 | 2.26% | ~1.1% |
-| 6. Section headers | 85,122 | 0.61% | ~1.3% |
+85,122 chars, 0.61% of the corpus, ~1.1% of the context. Leave it alone. `Inherits:` is the class hierarchy — real
+signal, and the larger half. Only the bare `Description` / `Tutorials` labels are pure structure.
 
-Finding 3 is blocked on a product decision, not on code: some answers legitimately want a doc URL. Decide whether
-citations come from chapter metadata instead of inline text.
+There is also a measurement problem. **Its run-to-run drift is as large as its total size.** Three runs on one
+unchanged database gave 1.24%, 1.29%, 1.28%, and bracketed URLs behaved the same way at 1.13%, 1.05%, 1.12%. LLM query
+expansion is nondeterministic, so a different pool is retrieved every run.
 
-Finding 6 should probably be left alone. `Inherits:` is the class hierarchy — real signal, and the larger half. Only
-the bare `Description` / `Tutorials` labels are pure structure.
-
-Both carry the same warning. **Their run-to-run drift is as large as their total size.** Three runs on one unchanged
-database:
-
-| Run | Bracketed URLs | Section headers |
-| --- | --- | --- |
-| 1 | 1.13% | 1.24% |
-| 2 | 1.05% | 1.29% |
-| 3 | 1.12% | 1.28% |
-
-LLM query expansion is nondeterministic, so a different pool is retrieved every run. Only step changes an order of
-magnitude past that drift are readable — overlap 7.47% → 0.01% and C# 7.48% → 0.00% were. Neither of these would be.
+Only step changes an order of magnitude past that drift are readable in this harness. Overlap 7.47% → 0.01% and C#
+7.48% → 0.00% were. The URL scrub was shipped anyway, because "nothing reads these" is an argument that does not need
+the harness to agree.
 
 ## Result
 
 | Category | Before | After |
 | --- | --- | --- |
-| Overlap head copy | 7.47% | 0.01% |
-| C# blocks | 7.48% | 0.00% |
-| Bracketed URLs | ~1.1% | ~1.1% (untouched) |
-| Section headers | ~1.3% | ~1.3% (untouched) |
+| Overlap head copy | 7.47% | 0.00% |
+| C# blocks | 7.48% | 0.08% |
+| Bracketed URLs | ~1.1% | 0.00% |
 | Boilerplate | 0.00% | 0.00% |
+| Section headers | ~1.3% | ~1.1% (untouched) |
+| **Union, safe set** | **9.82% + 7.48% C#** | **1.13%** |
 
-About 15 points of the five-slot budget went from duplicated text to real content, at an unchanged ~8200 chars per
-answer. Corpus 8889 → 7783 chunks.
+About 16 points of the five-slot budget went from duplicated text to real content, at an unchanged ~8400 chars per
+answer. Corpus 8889 → 7582 chunks, 13.99M → 11.59M chars.
+
+The two readings that hold still across runs both moved up by one on the last arm: top-3 15/20 → 16/20 and present
+17/20 → 18/20. Those were identical in all ten runs before it, so it is worth noting — but it is one arm, and ingest
+arms are never perfectly paired.
 
 Corpus shrink was never the win. The win is what fills the 5 reranked slots.
 
