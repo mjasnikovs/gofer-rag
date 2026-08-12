@@ -5,6 +5,7 @@
 import {EPub} from 'epub2'
 import {config} from '../src/config'
 import {htmlToText} from './html'
+import {dropCsharpTabs, namesCsharp} from './scrub'
 import type {Chapter} from '../src/types'
 
 // epub2 ships a broken .d.ts (its TocElement index signature conflicts with its
@@ -44,9 +45,12 @@ export async function readChapters(): Promise<Chapter[]> {
     for (const item of epub.flow) {
         if (!item.id) continue
         const html = await epub.getChapterAsync(item.id)
-        const text = htmlToText(html)
-        if (text.length < 40) continue // skip empty / nav-only pages
+        const raw = htmlToText(html)
+        if (raw.length < 40) continue // skip empty / nav-only pages
         const title = item.title ?? headingTitle(html) ?? item.href ?? item.id
+        // The emptiness check runs on the unscrubbed text so dropping C# tabs
+        // can never change which pages become chapters, and `order` stays put.
+        const text = namesCsharp(title) ? raw : dropCsharpTabs(raw)
         chapters.push({title, href: item.href ?? '', order: order++, text})
     }
     return chapters

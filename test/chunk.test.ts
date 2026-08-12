@@ -34,4 +34,14 @@ describe('chunkChapter', () => {
         expect(chunks[0]!.text).not.toContain('b')
         expect(chunks[1]!.text).toContain('b')
     })
+
+    // A paragraph seam copies nothing. Packing never cuts a paragraph, so the
+    // old tail copy bought no context and cost 11.87% of the corpus — see the
+    // header of ingest/chunk.ts.
+    test('carries no overlap across a paragraph seam', () => {
+        const chunks = chunkChapter(chapter(`${'a'.repeat(1_000)}\n\n${'b'.repeat(1_000)}`))
+
+        expect(chunks[1]!.text).toBe('b'.repeat(1_000))
+        expect(chunks[1]!.text).not.toContain('a')
+    })
 })
