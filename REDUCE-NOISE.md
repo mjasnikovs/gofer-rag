@@ -23,15 +23,18 @@ the whole list and killed three of the six findings outright.
 | 2. "No description" boilerplate | 0.92% | 0.00% | **fixed** with finding 3 |
 | 6. Section headers | 0.61% | ~1.3% | open, leave alone |
 | 5. Prose-free index chunks | 16.60% | 26% | dead — false positive |
+| 7. Code indentation stripped | n/a | n/a | **fixed** — corruption, not noise |
 
 ## Corpus now
 
 | Metric | Before | After |
 | --- | --- | --- |
-| Chunks | 8889 | **7582** |
-| Chars | 13,985,089 | **11,586,313** |
-| Chunk chars min / median / max | 27 / 1726 / 2611 | 27 / 1722 / 2583 |
+| Chunks | 8889 | **7671** |
+| Chars | 13,985,089 | **11,935,338** |
 | Chapters | 1586 | 1586 |
+
+The chunk count rose from 7582 after findings 4 and 7 landed: 7582 → 7636 is the prose the C# cut had been eating,
+7636 → 7671 is code blocks becoming their own paragraphs.
 
 `chunkChars` 1800, `overlapChars` 240, `rerankKeep` 5.
 
@@ -81,6 +84,30 @@ purpose is the side-by-side. 25 of the corpus's 894 C# markers sit in such chapt
 The reversible alternative, if this turns out to matter: keep both blocks, tag the block language at ingest, filter at
 serve time by what the question looks like.
 
+### The first cut was made on the text, and it ate prose
+
+`dropCsharpTabs()` originally worked on the flattened text, where a tab has no end tag, so it had to guess: the block
+ran to the next language marker or the next line of "real prose", prose being six-plus words ending in `.!?`.
+`htmlToText()` hard-wraps paragraphs. The opening lines of the paragraph after a tab almost never end in punctuation,
+so they were eaten with the code.
+
+Measured on the real EPUB: **404 of the 894 blocks over-ate**, at least 935 prose lines and ~60k chars. In "Creating
+your first script" the whole paragraph explaining `extends` disappeared, and the shipped chunk read:
+
+```
+GDScript
+extends Sprite2D
+Godot uses to manage your application's memory.
+```
+
+The fix is to cut on the HTML, before flattening, where the pane has a real closing tag. Sphinx emits exactly one
+spelling: `<div class="highlight-csharp notranslate">`, matched to its close by div depth, paired with the `<p>C#</p>`
+tab label. 890 panes go. The 136 panes with no label are not tabs — they are the only sample on their page, and they
+stay.
+
+This is the one arm here that moved the harness past its noise floor: fundamentals top-3 **16/20 → 19/20**, present
+18/20 → 19/20, against a reading that had been 16 and 18 in every previous run.
+
 ## Fixed — finding 3, bracketed URLs (and finding 2 with it)
 
 `htmlToText()` keeps every link target inline as `[https://...]`, beside the link text it already kept. 3954 of them,
@@ -115,6 +142,30 @@ that had held nothing but a link. Blank lines are the paragraph separator `split
 chapter became one giant paragraph and the whole corpus went down the hard-split path — which legitimately carries
 overlap. Overlap noise went straight back to 6.34% of context and answers grew to 9694 chars. The scrub now works line
 by line and only drops a line that scrubbing emptied.
+
+## Fixed — finding 7, code indentation was destroyed
+
+Not noise. Corruption, and it was in every code sample in the book.
+
+`htmlToText()` collapsed `[ \t]+` to one space and then stripped what was left at the head of a line. It did that
+inside `<pre>` too, so all 3940 code blocks came out at column zero:
+
+```
+func _physics_process(delta):
+pass
+```
+
+GDScript is indent-based. Finding 5 below establishes that code samples are most of what the reranker keeps, so this
+was wrong on exactly the chunks that reach the answer LLM.
+
+Fix: `ingest/html.ts` lifts each `<pre>` out before the whitespace passes and puts it back after. Code blocks also get
+a blank line on each side, so a sample is its own paragraph — the unit `splitToBudget()` packs by — instead of being
+glued to the prose around it and cut in half at a budget boundary.
+
+The harness cannot see this. It grades which chunks come back, not whether the code inside them is valid. Two runs on
+the rebuilt store gave identical numbers, one below the C# arm on fundamentals top-3 and realistic — and that gap sits
+inside the re-index noise of confound 3, not above it. Shipped on the argument, not the score: broken GDScript is
+broken whether or not the eval suite can read it.
 
 ## Dead — finding 5, prose-free index chunks
 
@@ -160,13 +211,25 @@ the harness to agree.
 | **Union, safe set** | **9.82% + 7.48% C#** | **1.13%** |
 
 About 16 points of the five-slot budget went from duplicated text to real content, at an unchanged ~8400 chars per
-answer. Corpus 8889 → 7582 chunks, 13.99M → 11.59M chars.
-
-The two readings that hold still across runs both moved up by one on the last arm: top-3 15/20 → 16/20 and present
-17/20 → 18/20. Those were identical in all ten runs before it, so it is worth noting — but it is one arm, and ingest
-arms are never perfectly paired.
+answer. Corpus 8889 → 7671 chunks, 13.99M → 11.94M chars.
 
 Corpus shrink was never the win. The win is what fills the 5 reranked slots.
+
+Eval suite, whole run, GPU box, `--repeats 7`:
+
+| Eval | Before findings 4 and 7 | C# cut in HTML | + code indentation |
+| --- | --- | --- | --- |
+| retrieval | 10/10 | 10/10 | 10/10 |
+| fundamentals top-3 | 16/20 | **19/20** | 18/20 |
+| fundamentals present | 18/20 | **19/20** | 18/20 |
+| paraphrase | 20/22 | 20/22 | 20/22 |
+| realistic | 30/33 | 29/33 | 28/33 |
+| coverage | 100% | 100% | 100% |
+| coverage lowercase | 98.0% | 98.1% | 98.4% |
+
+Top-3 16 → 19 is the only reading here that clears the noise floor: it had been exactly 16 in ten prior runs. The
+last column was measured twice on its own store and came back identical both times, so its two one-point drops are
+stable within that store — but they still straddle a re-index, which confound 3 says moves pools on its own.
 
 ## Before changing anything else
 
