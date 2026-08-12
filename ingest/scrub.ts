@@ -25,6 +25,18 @@
 // differences to GDScript" is 22 tab pairs whose entire purpose is showing the
 // two languages side by side, and 894 of the corpus's C# markers, only 25 sit
 // in a C#-titled chapter.
+//
+// The cut is made on the HTML, not on the flattened text. The first version of
+// this worked on the text and had to GUESS where the C# block ended: it ran to
+// the next language marker or the next line of "real prose", prose being a line
+// of six or more words ending in `.!?`. htmlToText() hard-wraps paragraphs, so
+// the opening lines of the paragraph AFTER a tab almost never end in
+// punctuation — and were eaten with the code. Measured on the real EPUB: 404 of
+// the 894 blocks over-ate, at least 935 prose lines and ~60k chars, e.g. in
+// "Creating your first script" the whole paragraph explaining `extends`
+// disappeared and the chunk read `extends Sprite2D` / `Godot uses to manage
+// your application's memory.` In HTML the boundary is a tag, so there is
+// nothing to guess.
 
 // htmlToText() keeps every link target inline as `[https://...]`, next to the
 // link text it already kept. Nothing downstream reads them: the answer prompt
@@ -52,42 +64,54 @@ const NO_DESCRIPTION =
     /[ \t]*There is currently no description for this [a-z ]+\. Please help us by contributing one \[[^\]]*\]!/g
 const BARE_ISSUE_LINK = /[ \t]*\bGH-\d+ \[(?:https?|ftp):\/\/[^\]\s]*\]/g
 
-const LANGUAGE_MARKER = /^(?:GDScript|C#|C\+\+|GLSL|Shader|Text|Output|INI|XML|JSON)$/
-// Code comments read exactly like prose ("// Called when the node enters the
-// scene tree."), so they must not be mistaken for the paragraph that ends a
-// code block. `#` alone is the tail of the `C#` marker, never a comment.
-const COMMENT = /^(?:\/\/|\/\*|\*|#(?!\s*$))/
-
-function isProse(line: string): boolean {
-    if (COMMENT.test(line)) return false
-    return line.split(/\s+/).length >= 6 && /[.!?]$/.test(line)
-}
-
 // A chapter whose own title names C#. Its samples are the subject, not a
 // duplicate of a GDScript sample above them.
 export function namesCsharp(title: string): boolean {
     return /(?:^|\W)C#/.test(title)
 }
 
-// A `C#` marker line opens the block. The block runs to the next language
-// marker, the next line of real prose, or the end of the chapter — the three
-// things that can follow a flattened tab.
-export function dropCsharpTabs(text: string): string {
-    const kept: string[] = []
-    let inCsharp = false
-    for (const line of text.split('\n')) {
-        const trimmed = line.trim()
-        if (inCsharp) {
-            if (!LANGUAGE_MARKER.test(trimmed) && !isProse(trimmed)) continue
-            inCsharp = false
-        }
-        if (trimmed === 'C#') {
-            inCsharp = true
-            continue
-        }
-        kept.push(line)
+// The tab label, and the highlighted code pane it labels. Sphinx emits exactly
+// one spelling of each in this book: 892 labels and 1028 panes over 1682
+// chapters, every pane opening `<div class="highlight-csharp notranslate">`.
+//
+// The 136 panes with no label are NOT tabs — they are standalone C# samples on
+// a page that has no GDScript twin, and they stay. Pairing label to pane keeps
+// this cut to the same 892 duplicates the text-based version removed.
+const CSHARP_LABEL = /<p[^>]*>C#<\/p>/gi
+const CSHARP_PANE = '<div class="highlight-csharp'
+const DIV_TAG = /<div\b|<\/div>/gi
+
+// Index just past the `</div>` closing the tag that opens at `start`, counting
+// depth so the nested `<div class="highlight">` inside a pane cannot end the
+// cut early. -1 if the document runs out first.
+function divEnd(html: string, start: number): number {
+    DIV_TAG.lastIndex = start
+    let depth = 0
+    for (let m = DIV_TAG.exec(html); m; m = DIV_TAG.exec(html)) {
+        depth += m[0].startsWith('</') ? -1 : 1
+        if (depth === 0) return DIV_TAG.lastIndex
     }
-    return kept.join('\n').replace(/\n{3,}/g, '\n\n')
+    return -1
+}
+
+// Takes HTML, before htmlToText() flattens it. Cuts from each `C#` tab label
+// through the end of the code pane that follows it. Between the two sit only
+// empty layout containers, so cutting the span takes no content with it.
+export function dropCsharpTabs(html: string): string {
+    let out = ''
+    let from = 0
+    CSHARP_LABEL.lastIndex = 0
+    for (let label = CSHARP_LABEL.exec(html); label; label = CSHARP_LABEL.exec(html)) {
+        if (label.index < from) continue
+        const pane = html.indexOf(CSHARP_PANE, label.index)
+        if (pane === -1) break
+        const end = divEnd(html, pane)
+        if (end === -1) break
+        out += html.slice(from, label.index)
+        from = end
+        CSHARP_LABEL.lastIndex = end
+    }
+    return out + html.slice(from)
 }
 
 // Line by line, because a line that held nothing but a link should go while a

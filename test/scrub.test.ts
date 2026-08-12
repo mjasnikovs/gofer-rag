@@ -1,59 +1,77 @@
 import {describe, expect, test} from 'bun:test'
 import {dropBracketedUrls, dropCsharpTabs, namesCsharp} from '../ingest/scrub'
 
+// The shape sphinx emits for a GDScript/C# tab widget, trimmed to what the cut
+// actually reads. The nested `<div class="highlight">` inside each pane is the
+// reason the closing tag has to be matched by depth.
+function tabs(gdscript: string, csharp: string): string {
+    return [
+        '<div class="sphinx-tabs docutils container">',
+        '<div class="docutils container">',
+        '<div class="docutils container"><div class="docutils container">',
+        '<p>GDScript</p>',
+        '</div></div>',
+        `<div class="highlight-gdscript notranslate"><div class="highlight"><pre>${gdscript}</pre></div>`,
+        '</div>',
+        '</div>',
+        '<div class="docutils container">',
+        '<div class="docutils container"><div class="docutils container">',
+        '<p>C#</p>',
+        '</div></div>',
+        `<div class="highlight-csharp notranslate"><div class="highlight"><pre>${csharp}</pre></div>`,
+        '</div>',
+        '</div>',
+        '</div>'
+    ].join('\n')
+}
+
 describe('dropCsharpTabs', () => {
     test('drops the C# half of a tab pair and keeps the GDScript half', () => {
-        const text = [
-            'Connect the button to a method.',
-            'GDScript',
-            'func _on_close_button_pressed():',
-            'get_tree().paused = false',
-            'C#',
-            'private void OnCloseButtonPressed()',
-            '{',
-            'GetTree().Paused = false;',
-            '}',
-            'You should now have a working pause menu.'
-        ].join('\n')
+        const html = `<p>Connect the button.</p>\n${tabs('get_tree().paused = false', 'GetTree().Paused = false;')}\n<p>Done.</p>`
+        const out = dropCsharpTabs(html)
 
-        expect(dropCsharpTabs(text)).toBe(
-            [
-                'Connect the button to a method.',
-                'GDScript',
-                'func _on_close_button_pressed():',
-                'get_tree().paused = false',
-                'You should now have a working pause menu.'
-            ].join('\n')
-        )
+        expect(out).toContain('get_tree().paused = false')
+        expect(out).not.toContain('GetTree().Paused')
+        expect(out).not.toContain('<p>C#</p>')
+        expect(out).toContain('<p>GDScript</p>')
+        expect(out).toContain('<p>Done.</p>')
     })
 
-    test('ends the block at the end of the chapter when no prose follows', () => {
-        const text = ['GDScript', 'var a = 1', 'C#', 'var a = 1;'].join('\n')
+    // The bug the text-based version had: it guessed the block ended at the
+    // first line of six-plus words ending in `.!?`, and htmlToText() wraps
+    // paragraphs, so the head of the next paragraph went with the code.
+    test('keeps the whole paragraph that follows the tabs', () => {
+        const prose =
+            '<p>Every GDScript file is implicitly a class. The extends keyword defines the\nclass this script inherits or extends. In this case, it is Sprite2D, meaning\nour script gets the properties of\nNode.</p>'
+        const html = `${tabs('extends Sprite2D', 'public partial class MySprite2D : Sprite2D\n{\n}')}\n${prose}`
 
-        expect(dropCsharpTabs(text)).toBe(['GDScript', 'var a = 1'].join('\n'))
+        expect(dropCsharpTabs(html)).toContain(prose)
     })
 
-    // A C# comment is six-plus words ending in a period, which is also the
-    // shape of the prose line that closes a block. The comment must not end it.
-    test('does not end the block on a code comment', () => {
-        const text = [
-            'GDScript',
-            'func _ready():',
-            'C#',
-            '// Called when the node and its children have entered the scene tree.',
-            'public override void _Ready() { }',
-            'Real prose closes the block right here.'
-        ].join('\n')
+    test('handles two tab widgets in one chapter', () => {
+        const html = `${tabs('var a = 1', 'var a = 1;')}\n<p>Between.</p>\n${tabs('var b = 2', 'var b = 2;')}`
+        const out = dropCsharpTabs(html)
 
-        expect(dropCsharpTabs(text)).toBe(
-            ['GDScript', 'func _ready():', 'Real prose closes the block right here.'].join('\n')
-        )
+        expect(out).toContain('var a = 1')
+        expect(out).toContain('var b = 2')
+        expect(out).toContain('<p>Between.</p>')
+        expect(out).not.toContain('var a = 1;')
+        expect(out).not.toContain('var b = 2;')
     })
 
-    test('leaves text with no C# marker untouched', () => {
-        const text = 'A paragraph mentioning C# inline stays exactly as written.'
+    // 136 of the book's 1028 C# panes have no tab label: they are the only
+    // sample on the page, not a duplicate of a GDScript one above.
+    test('keeps an unlabelled C# pane, which has no GDScript twin', () => {
+        const html =
+            '<div class="highlight-csharp notranslate"><div class="highlight"><pre>var a = 1;</pre></div>\n</div>'
 
-        expect(dropCsharpTabs(text)).toBe(text)
+        expect(dropCsharpTabs(html)).toBe(html)
+    })
+
+    test('leaves HTML with no C# tab untouched', () => {
+        const html = '<p>A paragraph mentioning C# inline stays exactly as written.</p>'
+
+        expect(dropCsharpTabs(html)).toBe(html)
     })
 })
 

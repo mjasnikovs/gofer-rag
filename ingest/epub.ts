@@ -48,9 +48,11 @@ export async function readChapters(): Promise<Chapter[]> {
         const raw = htmlToText(html)
         if (raw.length < 40) continue // skip empty / nav-only pages
         const title = item.title ?? headingTitle(html) ?? item.href ?? item.id
-        // The emptiness check runs on the unscrubbed text so dropping C# tabs
-        // can never change which pages become chapters, and `order` stays put.
-        const text = dropBracketedUrls(namesCsharp(title) ? raw : dropCsharpTabs(raw))
+        // The emptiness check above runs on the unscrubbed text so dropping C#
+        // tabs can never change which pages become chapters, and `order` stays
+        // put. The C# cut is made on the HTML, where a tab pane has a real
+        // closing tag, so the page is flattened a second time after it.
+        const text = dropBracketedUrls(namesCsharp(title) ? raw : htmlToText(dropCsharpTabs(html)))
         chapters.push({title, href: item.href ?? '', order: order++, text})
     }
     return chapters
