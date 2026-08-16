@@ -6,6 +6,8 @@ import type {GoferOptions, QueryResult, RankedChunk} from './types.js'
 export type {
     DownloadProgress,
     GoferOptions,
+    LlmComplete,
+    LlmCompletionRequest,
     ModelDownload,
     ModelDownloadConsent,
     QueryNotFound,

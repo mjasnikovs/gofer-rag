@@ -38,7 +38,7 @@ try {
     const importTest = join(project, 'import-test.mjs')
     writeFileSync(
         importTest,
-        "import * as gofer from '@mjasnikovs/gofer-rag'; const invalidOptions = [[{unknownOption: true}, 'unknown option'], [{allowModelDownloads: 'false'}, 'boolean or consent callback']]; for (const [options, expected] of invalidOptions) { try { await gofer.query('Node', options); throw new Error('invalid options accepted') } catch (error) { if (!String(error).includes(expected)) throw error } } console.log(typeof gofer.retrieve, typeof gofer.query)"
+        "import * as gofer from '@mjasnikovs/gofer-rag'; const invalidOptions = [[{unknownOption: true}, 'unknown option'], [{allowModelDownloads: 'false'}, 'boolean or consent callback'], [{complete: 'not a function'}, 'complete must be a function']]; for (const [options, expected] of invalidOptions) { try { await gofer.query('Node', options); throw new Error('invalid options accepted') } catch (error) { if (!String(error).includes(expected)) throw error } } console.log(typeof gofer.retrieve, typeof gofer.query)"
     )
     const importOutput = run(node, [importTest], {cwd: unrelated})
     if (importOutput.trim() !== 'function function') throw new Error(`unexpected import output: ${importOutput}`)
@@ -74,11 +74,11 @@ try {
 
     writeFileSync(
         join(project, 'consumer.ts'),
-        "import {query, retrieve, type GoferOptions, type QueryResult, type RankedChunk} from '@mjasnikovs/gofer-rag'\nconst options: GoferOptions = {allowModelDownloads: false}\nconst result: Promise<QueryResult> = query('Node', options)\nconst chunks: Promise<RankedChunk[]> = retrieve('Node', options)\nfunction render(value: QueryResult): string { return value.found ? value.answer : value.message }\nvoid result\nvoid chunks\nvoid render\n"
+        "import {query, retrieve, type GoferOptions, type LlmComplete, type QueryResult, type RankedChunk} from '@mjasnikovs/gofer-rag'\nconst complete: LlmComplete = async ({system, user, maxTokens}) => `${system}${user}${maxTokens}`\nconst options: GoferOptions = {allowModelDownloads: false, complete}\nconst result: Promise<QueryResult> = query('Node', options)\nconst chunks: Promise<RankedChunk[]> = retrieve('Node', options)\nfunction render(value: QueryResult): string { return value.found ? value.answer : value.message }\nvoid result\nvoid chunks\nvoid render\n"
     )
     writeFileSync(
         join(project, 'invalid-consumer.ts'),
-        "import {query, type QueryResult} from '@mjasnikovs/gofer-rag'\n// @ts-expect-error unknown options must be rejected\nvoid query('Node', {unknownOption: true})\n// @ts-expect-error consent must be a boolean or callback\nvoid query('Node', {allowModelDownloads: 'false'})\n// @ts-expect-error successful responses always contain an answer and sources\nconst invalidSuccess: QueryResult = {found: true}\nvoid invalidSuccess\n"
+        "import {query, type QueryResult} from '@mjasnikovs/gofer-rag'\n// @ts-expect-error unknown options must be rejected\nvoid query('Node', {unknownOption: true})\n// @ts-expect-error consent must be a boolean or callback\nvoid query('Node', {allowModelDownloads: 'false'})\n// @ts-expect-error a supplied completion must be a function\nvoid query('Node', {complete: 'not a function'})\n// @ts-expect-error successful responses always contain an answer and sources\nconst invalidSuccess: QueryResult = {found: true}\nvoid invalidSuccess\n"
     )
     writeFileSync(
         join(project, 'tsconfig.json'),

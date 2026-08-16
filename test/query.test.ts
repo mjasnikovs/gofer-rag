@@ -1,4 +1,4 @@
-import {describe, expect, test} from 'bun:test'
+import {afterEach, describe, expect, test} from 'bun:test'
 import {
     gatherCandidates,
     isRefusal,
@@ -9,7 +9,8 @@ import {
     warmup,
     type QueryDependencies
 } from '../src/core/query'
-import {config} from '../src/config'
+import {config, configure, resetConfiguration} from '../src/config'
+import {expandQuery, generateAnswer} from '../src/ai/llm'
 import type {StoredChunk} from '../src/types'
 
 const chunk = (id: string, chapter: string, text = `${chapter} documentation`): StoredChunk => ({
@@ -220,5 +221,68 @@ describe('query orchestration', () => {
             answer: 'question: grounded',
             sources: [{chapter: 'Node', order: 1, score: 3}]
         })
+    })
+})
+
+// The same pipeline with the real llm.ts functions wired in, so the host's
+// injected connection is the only thing standing in for a model.
+describe('host-supplied completions', () => {
+    afterEach(() => resetConfiguration())
+
+    const hosted = (overrides: DependencyOverrides = {}): QueryDependencies =>
+        dependencies({
+            expandQuery,
+            generateAnswer,
+            vectorSearch: () => Promise.resolve([chunk('1', 'Tween')]),
+            rerank: () => Promise.resolve([3]),
+            ...overrides
+        })
+
+    test('expands and answers through the injected connection', async () => {
+        const asked: string[] = []
+        configure({
+            complete: request => {
+                asked.push(request.system)
+                return Promise.resolve(
+                    request.system.includes('Godot 4 engine expert') ?
+                        'Tween, tween_property, Animation'
+                    :   'Use a Tween. [Tween]'
+                )
+            }
+        })
+
+        const result = await query('how do I animate a value', hosted())
+
+        expect(asked).toHaveLength(2)
+        expect(result).toEqual({
+            found: true,
+            answer: 'Use a Tween. [Tween]',
+            sources: [{chapter: 'Tween', order: 1, score: 3}]
+        })
+    })
+
+    test('still refuses when the injected connection answers with the refusal', async () => {
+        configure({complete: () => Promise.resolve(config.notFoundMessage)})
+
+        expect(await query('question', hosted())).toEqual({found: false, message: config.notFoundMessage})
+    })
+
+    test('retrieves unexpanded when the injected connection fails the expansion', async () => {
+        let rerankQuestion = ''
+        configure({complete: () => Promise.reject(new Error('host connection failed'))})
+
+        const result = await retrieveDetailed(
+            'how do I animate a value',
+            hosted({
+                rerank: question => {
+                    rerankQuestion = question
+                    return Promise.resolve([3])
+                }
+            })
+        )
+
+        expect(result.expansion).toBe('')
+        expect(rerankQuestion).toBe('how do I animate a value')
+        expect(result.kept[0]?.chapter).toBe('Tween')
     })
 })

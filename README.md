@@ -36,6 +36,25 @@ const answer = await query('How do I connect a signal?', {
 `retrieve()` is independent of answer generation and does not require the LLM server. `query()` retrieves first and then
 calls an OpenAI-compatible local chat-completions endpoint. Importing the package starts no CLI or server.
 
+## Supplying your own model connection
+
+A host that already has a configured model connection can hand it over with the `complete` option instead of pointing
+this package at a second endpoint. Both model calls — query expansion and answer generation — then run through it, so
+`llmBaseUrl` and `llmModel` are unused.
+
+```ts
+const answer = await query('How do I smoothly animate a value?', {
+    complete: async ({system, user, maxTokens}) => myModel.chat({system, user, maxTokens}),
+    allowModelDownloads: true
+})
+```
+
+Return the assistant's text with any thinking or reasoning already stripped — only the host knows its provider's
+dialect. Honour `maxTokens`: it is sized to cover a reasoning model's scratchpad plus its reply, and a smaller budget
+truncates the answer away. The prompts and the guards stay in this package: the expansion is still rejected unless it
+comes back as a term list, and the answer is still checked against the refusal gate. A `complete` that throws degrades
+exactly like an unreachable server — expansion is skipped and retrieval runs unexpanded.
+
 Programmatic calls never prompt. On first use, callers must set `allowModelDownloads: true` or provide a consent
 callback. Without consent, the call fails before downloading and reports model names, sources, destinations, and
 expected sizes. The three runtime models require approximately 1.13 GiB, 0.55 GiB and 0.02 GiB. Cached models require no

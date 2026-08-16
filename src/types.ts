@@ -62,6 +62,20 @@ export type DownloadProgress = {
 
 export type ModelDownloadConsent = (models: ModelDownload[]) => boolean | Promise<boolean>
 
+export type LlmCompletionRequest = {
+    system: string
+    user: string
+    maxTokens: number
+}
+
+// A host-supplied chat completion, so a consumer that already has a configured
+// model connection does not have to duplicate its URL, credentials and
+// reasoning settings here. It replaces the connection, not the judgment: the
+// prompts, the term-list guard and the decision of when to expand at all stay
+// in this package. Return the assistant's text with any thinking/reasoning
+// already removed — only the host knows its provider's dialect.
+export type LlmComplete = (request: LlmCompletionRequest) => Promise<string>
+
 export type GoferOptions = {
     cacheDir?: string
     databasePath?: string
@@ -69,7 +83,8 @@ export type GoferOptions = {
     llmModel?: string
     allowModelDownloads?: boolean | ModelDownloadConsent
     onDownloadProgress?: (progress: DownloadProgress) => void
+    complete?: LlmComplete
 }
 
-export type ResolvedGoferOptions = Required<Omit<GoferOptions, 'onDownloadProgress'>>
-    & Pick<GoferOptions, 'onDownloadProgress'>
+export type ResolvedGoferOptions = Required<Omit<GoferOptions, 'onDownloadProgress' | 'complete'>>
+    & Pick<GoferOptions, 'onDownloadProgress' | 'complete'>

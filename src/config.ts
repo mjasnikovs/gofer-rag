@@ -10,7 +10,8 @@ const optionNames = new Set<string>([
     'llmBaseUrl',
     'llmModel',
     'allowModelDownloads',
-    'onDownloadProgress'
+    'onDownloadProgress',
+    'complete'
 ])
 
 export function defaultCacheDir(platform: NodeJS.Platform = process.platform, home = homedir()): string {
@@ -81,6 +82,9 @@ function validateOptions(options: unknown): asserts options is GoferOptions {
     const progress = values.onDownloadProgress
     if (progress !== undefined && typeof progress !== 'function')
         throw new TypeError('onDownloadProgress must be a function')
+
+    const complete = values.complete
+    if (complete !== undefined && typeof complete !== 'function') throw new TypeError('complete must be a function')
 }
 
 function validateOptionalString(name: keyof GoferOptions, value: unknown): void {
@@ -107,7 +111,8 @@ export function getOptions(): ResolvedGoferOptions {
         llmBaseUrl: validateUrl(llmBaseUrl),
         llmModel: llmModel.trim(),
         allowModelDownloads: programmaticOptions.allowModelDownloads ?? environmentConsent ?? false,
-        onDownloadProgress: programmaticOptions.onDownloadProgress
+        onDownloadProgress: programmaticOptions.onDownloadProgress,
+        complete: programmaticOptions.complete
     }
 }
 

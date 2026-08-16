@@ -73,5 +73,15 @@ describe('runtime configuration', () => {
         expect(() => configure({onDownloadProgress: true} as unknown as GoferOptions)).toThrow(
             'onDownloadProgress must be a function'
         )
+        expect(() => configure({complete: 'not a function'} as unknown as GoferOptions)).toThrow(
+            'complete must be a function'
+        )
+    })
+
+    test('carries a host-supplied completion through to the resolved options', () => {
+        const complete = () => Promise.resolve('Tween, Animation')
+        expect(configure({complete}).complete).toBe(complete)
+        resetConfiguration()
+        expect(getOptions().complete).toBeUndefined()
     })
 })
