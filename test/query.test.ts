@@ -7,6 +7,7 @@ import {
     rankCandidates,
     retrieveDetailed,
     warmup,
+    type CutPolicy,
     type QueryDependencies
 } from '../src/core/query'
 import {config, configure, resetConfiguration} from '../src/config'
@@ -19,6 +20,23 @@ const chunk = (id: string, chapter: string, text = `${chapter} documentation`): 
     text,
     chapter,
     order: Number(id)
+})
+
+// A pool where Tree is named but both its chunks score below the five tutorials,
+// so the fill loop never reaches them and the title pin has to rescue one.
+const pinnable: StoredChunk[] = [
+    ...Array.from({length: 5}, (_, index) => chunk(String(index), `Tutorial ${index}`)),
+    chunk('6', 'Tree', 'Tree introduction'),
+    chunk('7', 'Tree', 'The font_color property controls text color.')
+]
+const pinnableScores = [10, 9, 8, 7, 6, 0, 1]
+
+const cut = (overrides: Partial<CutPolicy> = {}): CutPolicy => ({
+    keep: config.rerankKeep,
+    maxPassages: Number.POSITIVE_INFINITY,
+    maxGap: Number.POSITIVE_INFINITY,
+    pinReserve: Number.POSITIVE_INFINITY,
+    ...overrides
 })
 
 type DependencyOverrides = Partial<QueryDependencies>
@@ -74,6 +92,95 @@ describe('rankCandidates', () => {
         const ranked = rankCandidates('What is Tree?', [chunk('1', 'Tree')], [config.rerankThreshold - 1], ['Tree'])
 
         expect(ranked).toEqual([])
+    })
+
+    test('marks a pinned chapter so a caller can tell a rescue from a score hit', () => {
+        const ranked = rankCandidates('What is font_color on Tree?', pinnable, pinnableScores, ['Tree'])
+
+        expect(ranked.at(-1)?.pinned).toBe(true)
+        expect(ranked.filter(candidate => candidate.pinned)).toHaveLength(1)
+        expect(ranked.slice(0, -1).every(candidate => candidate.pinned === undefined)).toBe(true)
+    })
+
+    // The finding that made maxPassages exist rather than keep: a pin fires when
+    // a named chapter falls out of the kept set, so squeezing keep produces MORE
+    // pins. keep 1 here returns 2 passages, not 1.
+    test('keep alone does not bound the returned count, because it feeds the pin', () => {
+        const ranked = rankCandidates('What is font_color on Tree?', pinnable, pinnableScores, ['Tree'], cut({keep: 1}))
+
+        expect(ranked).toHaveLength(2)
+        expect(ranked.at(-1)?.pinned).toBe(true)
+    })
+
+    test('maxPassages is a hard ceiling that counts pins', () => {
+        const ranked = rankCandidates(
+            'What is font_color on Tree?',
+            pinnable,
+            pinnableScores,
+            ['Tree'],
+            cut({maxPassages: 3})
+        )
+
+        expect(ranked).toHaveLength(3)
+    })
+
+    // The regression this whole change exists to prevent: a consumer capping to
+    // three must not lose the rescued chapter the way slice(0, 3) would.
+    test('a pin survives the ceiling that a naive slice would have cut', () => {
+        const ranked = rankCandidates(
+            'What is font_color on Tree?',
+            pinnable,
+            pinnableScores,
+            ['Tree'],
+            cut({maxPassages: 3})
+        )
+
+        expect(ranked.filter(candidate => candidate.pinned)).toHaveLength(1)
+        expect(ranked.at(-1)?.text).toContain('font_color')
+    })
+
+    test('a ceiling of one keeps the best chunk and no pin', () => {
+        const ranked = rankCandidates(
+            'What is font_color on Tree?',
+            pinnable,
+            pinnableScores,
+            ['Tree'],
+            cut({maxPassages: 1})
+        )
+
+        expect(ranked).toHaveLength(1)
+        expect(ranked[0]?.score).toBe(10)
+        expect(ranked[0]?.pinned).toBeUndefined()
+    })
+
+    test('pinReserve zero drops the rescue a ceiling would otherwise keep', () => {
+        const ranked = rankCandidates(
+            'What is font_color on Tree?',
+            pinnable,
+            pinnableScores,
+            ['Tree'],
+            cut({maxPassages: 3, pinReserve: 0})
+        )
+
+        expect(ranked).toHaveLength(3)
+        expect(ranked.some(candidate => candidate.pinned)).toBe(false)
+    })
+
+    test('maxGap drops chunks too far below the best one', () => {
+        const candidates = Array.from({length: 4}, (_, index) => chunk(String(index), `Chapter ${index}`))
+        const ranked = rankCandidates('question', candidates, [5, 4.5, 1, 0], [], cut({maxGap: 1}))
+
+        expect(ranked.map(candidate => candidate.score)).toEqual([5, 4.5])
+    })
+
+    // Structural, and the reason the refusal gate is immune to any cut in this
+    // family: rank 1 is always within every ceiling and every gap.
+    test('no cut can empty a set that the threshold let through', () => {
+        const candidates = Array.from({length: 4}, (_, index) => chunk(String(index), `Chapter ${index}`))
+        const scores = [2, 1, 0, -1]
+        for (const policy of [{maxPassages: 1}, {maxPassages: 2}, {keep: 1}, {maxGap: 0}, {maxGap: 0.5}]) {
+            expect(rankCandidates('question', candidates, scores, [], cut(policy)).length).toBeGreaterThan(0)
+        }
     })
 })
 

@@ -76,6 +76,21 @@ describe('runtime configuration', () => {
         expect(() => configure({complete: 'not a function'} as unknown as GoferOptions)).toThrow(
             'complete must be a function'
         )
+        for (const bad of [0, -1, 2.5, Number.POSITIVE_INFINITY, Number.NaN, '3']) {
+            expect(() => configure({maxPassages: bad} as unknown as GoferOptions)).toThrow(
+                'maxPassages must be a positive integer'
+            )
+        }
+    })
+
+    test('resolves the passage ceiling, defaulting to no ceiling at all', () => {
+        expect(getOptions().maxPassages).toBe(Number.POSITIVE_INFINITY)
+        expect(configure({maxPassages: 3}).maxPassages).toBe(3)
+        resetConfiguration()
+        process.env.GOFER_RAG_MAX_PASSAGES = '4'
+        expect(getOptions().maxPassages).toBe(4)
+        process.env.GOFER_RAG_MAX_PASSAGES = 'lots'
+        expect(() => getOptions()).toThrow('must be a positive integer')
     })
 
     test('carries a host-supplied completion through to the resolved options', () => {

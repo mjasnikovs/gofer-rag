@@ -1,0 +1,559 @@
+{
+    "How do I connect a signal to a method in GDScript?": [
+        "21-4",
+        "1662-1",
+        "44-1",
+        "1645-14",
+        "364-2",
+        "923-0 pinned"
+    ],
+    "How do I declare my own signal and emit it from a script?": [
+        "21-5",
+        "418-5",
+        "302-42",
+        "453-38",
+        "345-12"
+    ],
+    "How do I run code when a node enters the scene tree?": [
+        "363-0",
+        "512-0",
+        "373-1",
+        "361-1",
+        "49-4"
+    ],
+    "How do I run code every frame?": [
+        "360-0",
+        "49-1",
+        "254-0",
+        "363-1",
+        "1287-7"
+    ],
+    "How do I create a scene instance from code while the game is running?": [
+        "362-2",
+        "371-1",
+        "632-0",
+        "45-0",
+        "17-0"
+    ],
+    "How do I get a reference to another node from my script?": [
+        "362-0",
+        "374-0",
+        "512-32",
+        "1644-2",
+        "44-2"
+    ],
+    "How do I add a child node from code?": [
+        "512-24",
+        "362-0",
+        "16-1",
+        "291-8",
+        "32-0"
+    ],
+    "How do I move a character with the keyboard?": [
+        "90-1",
+        "256-2",
+        "253-0",
+        "548-0",
+        "249-7"
+    ],
+    "How do I read the keys and mouse buttons the player presses?": [
+        "195-0",
+        "1306-1",
+        "25-1",
+        "196-1",
+        "953-3"
+    ],
+    "How do I write my first script and attach it to a node?": [
+        "19-0",
+        "25-0",
+        "18-0",
+        "1597-0",
+        "7-2"
+    ],
+    "How do I make a variable editable in the inspector?": [
+        "1675-2",
+        "341-4",
+        "304-0",
+        "291-3",
+        "174-2"
+    ],
+    "How do I store a value that every scene can read?": [
+        "1483-0",
+        "372-0",
+        "367-0",
+        "46-1",
+        "588-11"
+    ],
+    "How do I pause the game?": [
+        "369-0",
+        "61-1",
+        "418-3",
+        "1520-7",
+        "1483-0"
+    ],
+    "How do I save the player progress to a file?": [
+        "1239-0",
+        "186-0",
+        "455-2",
+        "370-0",
+        "940-0"
+    ],
+    "How do I change to another scene from code?": [
+        "367-0",
+        "373-3",
+        "1483-6",
+        "1006-0",
+        "17-0"
+    ],
+    "How do I keep the HUD on screen while the camera moves?": [
+        "80-0",
+        "690-0",
+        "539-1",
+        "691-0",
+        "70-15"
+    ],
+    "How do I pick a random number?": [
+        "1424-0",
+        "1676-49",
+        "208-2",
+        "337-2",
+        "70-13"
+    ],
+    "How do I detect when two objects collide?": [
+        "249-0",
+        "522-0",
+        "252-0",
+        "37-0",
+        "523-0"
+    ],
+    "How do I make an object fall with gravity?": [
+        "256-2",
+        "33-2",
+        "1422-123",
+        "1412-0",
+        "720-6"
+    ],
+    "How do I play a sound effect?": [
+        "38-4",
+        "530-0",
+        "162-0",
+        "46-0",
+        "29-0"
+    ],
+    "How do I make an enemy chase the player?": [
+        "434-4",
+        "549-0",
+        "34-2",
+        "548-0",
+        "253-6"
+    ],
+    "How do I save the player's progress so it persists between sessions?": [
+        "185-0",
+        "1239-0",
+        "186-0"
+    ],
+    "How do I make the camera smoothly follow the player character?": [
+        "136-1",
+        "539-4",
+        "434-5",
+        "256-2",
+        "16-0"
+    ],
+    "How do I play background music in my game?": [
+        "38-4",
+        "528-0",
+        "29-0",
+        "162-0",
+        "529-0"
+    ],
+    "How do I show the player's score as text on the screen?": [
+        "38-0",
+        "28-0",
+        "638-1",
+        "27-4",
+        "565-0"
+    ],
+    "How can I pause the game and resume it later?": [
+        "369-1",
+        "373-0",
+        "1483-0",
+        "1520-7",
+        "512-27"
+    ],
+    "How do I generate random numbers?": [
+        "1424-0",
+        "1676-51",
+        "208-1",
+        "1154-0",
+        "7-1"
+    ],
+    "How do I make my game adapt to different screen sizes?": [
+        "402-0",
+        "295-1",
+        "23-0",
+        "1422-67",
+        "61-1"
+    ],
+    "How do I create a character that walks and jumps in a platformer?": [
+        "253-7",
+        "249-8",
+        "84-0",
+        "16-0",
+        "256-3"
+    ],
+    "How do I switch to another level when the player reaches the exit?": [
+        "373-3",
+        "1483-0",
+        "24-0",
+        "44-6",
+        "361-1"
+    ],
+    "How do I run some code on every frame?": [
+        "360-0",
+        "49-1",
+        "254-0",
+        "363-1",
+        "512-1"
+    ],
+    "How do I make one node notify another when something happens?": [
+        "1645-19",
+        "44-1",
+        "11-1",
+        "21-6",
+        "345-11"
+    ],
+    "How do I translate my game into multiple languages?": [
+        "149-0",
+        "290-0",
+        "1517-0",
+        "1214-23",
+        "189-8"
+    ],
+    "How do I keep the UI in place while the camera moves around?": [
+        "80-0",
+        "265-1",
+        "691-0",
+        "690-0",
+        "539-1"
+    ],
+    "How do I create copies of a scene from code while the game runs?": [
+        "362-2",
+        "371-1",
+        "1483-0",
+        "17-0",
+        "1006-0"
+    ],
+    "How do I find out which object is under the mouse cursor?": [
+        "614-7",
+        "565-35",
+        "962-0",
+        "774-33",
+        "1306-0"
+    ],
+    "How do I smoothly animate a value from one number to another in code?": [
+        "1520-0",
+        "138-0",
+        "520-0",
+        "206-1",
+        "70-13"
+    ],
+    "How do I read which keys the player is pressing?": [
+        "195-0",
+        "25-1",
+        "20-0",
+        "1306-18",
+        "1344-23"
+    ],
+    "How do I store global game state that every scene can access?": [
+        "46-1",
+        "372-0",
+        "374-1",
+        "588-11",
+        "44-5"
+    ],
+    "How do I make objects fall with gravity and bounce off each other?": [
+        "721-0",
+        "701-0",
+        "249-1",
+        "17-2",
+        "558-0"
+    ],
+    "How do I add multiplayer over the network to my game?": [
+        "1344-41",
+        "1285-0",
+        "1329-0",
+        "1330-2",
+        "229-2"
+    ],
+    "What is a NavigationAgent2D used for?": [
+        "663-0",
+        "210-2",
+        "221-0",
+        "218-6",
+        "763-12"
+    ],
+    "How does NavigationAgent2D obstacle avoidance work?": [
+        "663-0",
+        "219-3",
+        "210-2",
+        "663-3",
+        "1342-18"
+    ],
+    "What does the CharacterBody2D node do?": [
+        "253-0",
+        "548-0",
+        "24-0",
+        "700-1",
+        "16-0"
+    ],
+    "What is an AnimationPlayer node?": [
+        "138-0",
+        "520-0",
+        "521-0",
+        "142-0",
+        "50-7"
+    ],
+    "How do I create an autoload singleton?": [
+        "372-0",
+        "284-4",
+        "46-2",
+        "1287-9",
+        "588-16"
+    ],
+    "How do I export a variable so it shows in the inspector?": [
+        "304-8",
+        "1675-10",
+        "341-4",
+        "174-2",
+        "342-0"
+    ],
+    "How do I detect when a body enters an Area2D?": [
+        "522-0",
+        "25-5",
+        "307-5",
+        "252-1",
+        "522-1"
+    ],
+    "How do I bake sourdough bread?": [],
+    "Who won the 2022 FIFA World Cup?": [],
+    "my player falls through the floor when moving fast": [
+        "33-3",
+        "256-2",
+        "548-0",
+        "39-5",
+        "253-0"
+    ],
+    "why does my sprite look blurry when i scale it up": [
+        "1450-65",
+        "542-5",
+        "1173-1",
+        "89-2",
+        "774-12"
+    ],
+    "my game freezes for a second when i load a new level": [
+        "1483-0",
+        "373-3",
+        "367-0",
+        "183-0",
+        "1006-0"
+    ],
+    "the game window looks tiny on high resolution screens": [
+        "295-1",
+        "1422-60",
+        "61-1",
+        "457-2",
+        "1242-48"
+    ],
+    "how do i stop everything while the menu is open": [
+        "369-1",
+        "418-4",
+        "1483-0",
+        "1520-3",
+        "373-0"
+    ],
+    "how do i use raycst2d to detect walls": [
+        "711-0",
+        "254-0",
+        "1410-13",
+        "720-2",
+        "522-1"
+    ],
+    "what does the anmiationplayer node do": [
+        "138-0",
+        "521-0",
+        "520-0",
+        "142-0",
+        "519-0"
+    ],
+    "how do i add a colison shape to my player": [
+        "31-1",
+        "24-2",
+        "433-0",
+        "253-4",
+        "258-0"
+    ],
+    "how do i export my game to andriod": [
+        "173-3",
+        "65-9",
+        "272-6",
+        "475-3",
+        "167-1"
+    ],
+    "how do i move a KinematicBody2D": [
+        "256-2",
+        "253-4",
+        "90-0",
+        "249-8",
+        "548-0"
+    ],
+    "can i still use yield to wait for a signal": [
+        "302-44",
+        "1520-10",
+        "337-9",
+        "1354-0",
+        "1233-0"
+    ],
+    "how do i change the translation of a Spatial node": [
+        "673-12",
+        "1071-2",
+        "716-0",
+        "1666-6",
+        "94-6"
+    ],
+    "whats the difference between Area2D and StaticBody2D": [
+        "249-5",
+        "700-0",
+        "522-0",
+        "752-0",
+        "720-6"
+    ],
+    "should my player be a CharacterBody2D or a RigidBody2D": [
+        "24-0",
+        "90-0",
+        "32-0",
+        "307-5",
+        "26-0",
+        "548-0 pinned",
+        "720-0 pinned"
+    ],
+    "how do i start an AnimationPlayer when a Timer times out": [
+        "765-2",
+        "765-0",
+        "520-6",
+        "27-2",
+        "28-2"
+    ],
+    "how do i attach a Camera2D to my CharacterBody2D so it follows the player": [
+        "18-0",
+        "16-0",
+        "253-4",
+        "24-0",
+        "136-1",
+        "548-0 pinned",
+        "539-1 pinned"
+    ],
+    "how do i make the camera follow the player": [
+        "136-1",
+        "265-2",
+        "743-0",
+        "33-4",
+        "1520-0"
+    ],
+    "how do i save the players high score between sessions": [
+        "1239-0",
+        "185-0"
+    ],
+    "how do i play a sound effect when the player gets hit": [
+        "529-0",
+        "162-1",
+        "25-5",
+        "528-0",
+        "24-2"
+    ],
+    "how do i make my character jump": [
+        "253-7",
+        "434-4",
+        "256-2",
+        "32-0",
+        "90-0"
+    ],
+    "how do i show a health bar above the player": [
+        "302-42",
+        "21-5",
+        "16-0",
+        "511-0",
+        "543-0"
+    ],
+    "whats the difference between preload and load": [
+        "51-2",
+        "1675-20",
+        "371-1",
+        "48-0",
+        "717-0"
+    ],
+    "how do i detect when the player clicks on a sprite": [
+        "749-2",
+        "196-4",
+        "24-0",
+        "554-3",
+        "557-0"
+    ],
+    "how do i make my character look at the mouse": [
+        "90-1",
+        "1050-0",
+        "434-3",
+        "548-0",
+        "253-4"
+    ],
+    "how do i make an online multiplayer game": [
+        "229-10",
+        "1344-41",
+        "1329-0",
+        "1330-0",
+        "1481-2"
+    ],
+    "does godot support c#": [
+        "310-0",
+        "351-0",
+        "469-0",
+        "4-1",
+        "18-2"
+    ],
+    "how big can my game world be before things break": [
+        "599-0",
+        "242-4"
+    ],
+    "how do i make a main menu with buttons": [
+        "588-12",
+        "285-1",
+        "1422-1",
+        "284-1",
+        "1322-0"
+    ],
+    "i get the error Attempt to call function 'play' in base 'null instance' on a null instance": [
+        "25-3",
+        "366-2",
+        "512-31",
+        "1290-0",
+        "1230-0"
+    ],
+    "Invalid get index 'position' (on base: 'null instance')": [
+        "721-2",
+        "701-0",
+        "523-1",
+        "549-0",
+        "733-6"
+    ],
+    "how do i make a discord bot in gdscript": [
+        "371-4",
+        "1-0"
+    ],
+    "how do i import my unity project into godot": [
+        "17-1",
+        "150-0",
+        "70-2",
+        "31-0",
+        "14-3"
+    ],
+    "whats the best pizza topping": []
+}

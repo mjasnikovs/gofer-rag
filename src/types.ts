@@ -23,7 +23,13 @@ export type StoredChunk = {
     order: number
 }
 
-export type RankedChunk = StoredChunk & {score: number}
+// `pinned` marks a chunk the title pin rescued rather than one the score kept.
+// A pin always scores below every score-kept chunk (a named chapter is exempt
+// from the chapter cap, so the only way out of the kept set is a lower score),
+// which means it always sorts last — and a consumer that truncates the array
+// cuts the rescue first. The flag is how a caller that must truncate can tell
+// the two apart; `maxPassages` is how it avoids truncating at all.
+export type RankedChunk = StoredChunk & {score: number; pinned?: true}
 
 export type Source = {
     chapter: string
@@ -84,6 +90,10 @@ export type GoferOptions = {
     allowModelDownloads?: boolean | ModelDownloadConsent
     onDownloadProgress?: (progress: DownloadProgress) => void
     complete?: LlmComplete
+    // Hard ceiling on returned passages, title pins included. Unset means no
+    // ceiling, which is the historical behaviour. Prefer this over slicing the
+    // returned array: the cut is applied before pinning, so the rescue survives.
+    maxPassages?: number
 }
 
 export type ResolvedGoferOptions = Required<Omit<GoferOptions, 'onDownloadProgress' | 'complete'>>

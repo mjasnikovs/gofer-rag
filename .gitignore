@@ -8,3 +8,4 @@ dist/
 .claude/
 .bun/
 docs/GodotEngine.epub
+.pools/

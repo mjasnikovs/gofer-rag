@@ -36,6 +36,33 @@ const answer = await query('How do I connect a signal?', {
 `retrieve()` is independent of answer generation and does not require the LLM server. `query()` retrieves first and then
 calls an OpenAI-compatible local chat-completions endpoint. Importing the package starts no CLI or server.
 
+### Bounding how much comes back
+
+`retrieve()` returns about five passages of up to ~1800 characters each. A host on a context budget can cap that with
+`maxPassages`:
+
+```ts
+const passages = await retrieve('How do I connect a signal?', {maxPassages: 4, allowModelDownloads: true})
+```
+
+**Use this instead of slicing the returned array.** Some passages are title pins — a chapter the question named
+verbatim, rescued into the result because the reranker under-ranked its reference page. A pin always scores below every
+passage the score kept, so it always sits last, so `slice(0, n)` cuts the rescues first. `maxPassages` is applied before
+pinning and reserves room for one, so the rescue survives. Pinned passages carry `pinned: true` if you need to tell them
+apart.
+
+Measured over the 83 labelled questions in this repo's eval sets (`bun run scripts/ab-cut.ts`):
+
+| `maxPassages` | passages/call | share of the bytes | labelled cases lost |
+| ------------- | ------------- | ------------------ | ------------------- |
+| unset         | 4.75          | 100%               | —                   |
+| 4             | 3.77          | 79%                | none                |
+| 3             | 2.86          | 60%                | 2                   |
+| 2             | 1.93          | 40%                | 6                   |
+
+Like every option here it is sticky: `configure()` merges into module-level state, so setting it once sets it for the
+process. `GOFER_RAG_MAX_PASSAGES` does the same from the environment.
+
 ## Supplying your own model connection
 
 A host that already has a configured model connection can hand it over with the `complete` option instead of pointing
@@ -67,8 +94,9 @@ The default cache is the operating system's user cache directory:
 - Windows: `%LOCALAPPDATA%\\gofer-rag`
 
 Use the absolute-path `cacheDir` option or `GOFER_RAG_CACHE_DIR` to override it. LLM settings can also be supplied with
-`GOFER_RAG_LLM_BASE_URL` and `GOFER_RAG_LLM_MODEL`. The packaged database is resolved from the installed module, not the
-working directory; an absolute `databasePath` or `GOFER_RAG_DATABASE_PATH` can override it.
+`GOFER_RAG_LLM_BASE_URL` and `GOFER_RAG_LLM_MODEL`, and the passage ceiling with `GOFER_RAG_MAX_PASSAGES`. The packaged
+database is resolved from the installed module, not the working directory; an absolute `databasePath` or
+`GOFER_RAG_DATABASE_PATH` can override it.
 
 ## CLI
 

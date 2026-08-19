@@ -11,7 +11,8 @@ const optionNames = new Set<string>([
     'llmModel',
     'allowModelDownloads',
     'onDownloadProgress',
-    'complete'
+    'complete',
+    'maxPassages'
 ])
 
 export function defaultCacheDir(platform: NodeJS.Platform = process.platform, home = homedir()): string {
@@ -37,6 +38,23 @@ function validateUrl(value: string): string {
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('llmBaseUrl must use http: or https:')
     return value.replace(/\/$/, '')
+}
+
+// Mirrors the consumer-side rule in gofer's rag-retrieve worker: a positive
+// integer or nothing. Infinity is rejected here even though it is the internal
+// "no ceiling" value — a caller asking for no ceiling omits the option.
+function validateOptionalPositiveInteger(name: keyof GoferOptions, value: unknown): void {
+    if (value === undefined) return
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1)
+        throw new TypeError(`${name} must be a positive integer`)
+}
+
+function environmentPositiveInteger(name: string): number | undefined {
+    const value = process.env[name]
+    if (value === undefined) return undefined
+    const parsed = Number(value)
+    if (!Number.isInteger(parsed) || parsed < 1) throw new Error(`${name} must be a positive integer`)
+    return parsed
 }
 
 function environmentBoolean(name: string): boolean | undefined {
@@ -85,6 +103,8 @@ function validateOptions(options: unknown): asserts options is GoferOptions {
 
     const complete = values.complete
     if (complete !== undefined && typeof complete !== 'function') throw new TypeError('complete must be a function')
+
+    validateOptionalPositiveInteger('maxPassages', values.maxPassages)
 }
 
 function validateOptionalString(name: keyof GoferOptions, value: unknown): void {
@@ -103,6 +123,10 @@ export function getOptions(): ResolvedGoferOptions {
         programmaticOptions.llmBaseUrl ?? process.env.GOFER_RAG_LLM_BASE_URL ?? 'http://localhost:8080/v1'
     const llmModel = programmaticOptions.llmModel ?? process.env.GOFER_RAG_LLM_MODEL ?? 'Qwen3.6-27B-NVFP4-MTP.gguf'
     const environmentConsent = environmentBoolean('GOFER_RAG_ALLOW_MODEL_DOWNLOADS')
+    const maxPassages =
+        programmaticOptions.maxPassages
+        ?? environmentPositiveInteger('GOFER_RAG_MAX_PASSAGES')
+        ?? Number.POSITIVE_INFINITY
 
     if (!llmModel.trim()) throw new Error('llmModel must not be empty')
     return {
@@ -112,7 +136,8 @@ export function getOptions(): ResolvedGoferOptions {
         llmModel: llmModel.trim(),
         allowModelDownloads: programmaticOptions.allowModelDownloads ?? environmentConsent ?? false,
         onDownloadProgress: programmaticOptions.onDownloadProgress,
-        complete: programmaticOptions.complete
+        complete: programmaticOptions.complete,
+        maxPassages
     }
 }
 

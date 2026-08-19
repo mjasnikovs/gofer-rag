@@ -77,6 +77,19 @@ async function runCommand(env: Record<string, string> = {}): Promise<number> {
 const dockerOk = sh(['docker', 'version']).ok
 if (dockerOk) sh(['docker', 'rm', '-f', BOX])
 const gpu = dockerOk ? pickGpus() : null
+// Free VRAM on a shared card swings across MIN_FREE_MIB on its own (measured
+// 22 MiB and 1118 MiB minutes apart on one unchanged container), so the
+// fallback is not rare. It is also silent enough to ruin an arm: the command
+// keeps running, 40x slower, on a DIFFERENT rerank backend. Anything capturing
+// a fixture sets this and gets a hard failure instead.
+if (!gpu && process.env.RERANK_BOX_REQUIRED) {
+    banner([
+        'RERANK_BOX_REQUIRED is set and no GPU has enough free VRAM.',
+        'Refusing to fall back to the in-process CPU reranker: it would change',
+        'the backend inside the arm and take ~20s/query. Free ~1GB and re-run.'
+    ])
+    process.exit(1)
+}
 if (!gpu) {
     banner([
         'No GPU has enough free VRAM (or Docker is missing) — running WITHOUT the',
