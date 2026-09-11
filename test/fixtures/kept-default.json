@@ -477,13 +477,7 @@
         "32-0",
         "90-0"
     ],
-    "how do i show a health bar above the player": [
-        "302-42",
-        "21-5",
-        "16-0",
-        "511-0",
-        "543-0"
-    ],
+    "how do i show a health bar above the player": [],
     "whats the difference between preload and load": [
         "51-2",
         "1675-20",
@@ -519,17 +513,8 @@
         "4-1",
         "18-2"
     ],
-    "how big can my game world be before things break": [
-        "599-0",
-        "242-4"
-    ],
-    "how do i make a main menu with buttons": [
-        "588-12",
-        "285-1",
-        "1422-1",
-        "284-1",
-        "1322-0"
-    ],
+    "how big can my game world be before things break": [],
+    "how do i make a main menu with buttons": [],
     "i get the error Attempt to call function 'play' in base 'null instance' on a null instance": [
         "25-3",
         "366-2",
@@ -544,10 +529,7 @@
         "549-0",
         "733-6"
     ],
-    "how do i make a discord bot in gdscript": [
-        "371-4",
-        "1-0"
-    ],
+    "how do i make a discord bot in gdscript": [],
     "how do i import my unity project into godot": [
         "17-1",
         "150-0",

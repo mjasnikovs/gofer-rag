@@ -78,13 +78,29 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // eval template (measured 2026-07-13), so those stay case-sensitive.
 export const distinctiveTitle = (t: string) => /\d/.test(t) || (t.match(/[A-Z]/g) ?? []).length >= 2
 
+// A qualified member reference — Timer.autostart, Tree.item_selected — names
+// its class whatever the case it is written in. The case-sensitivity rule above
+// exists because 66 of 84 single-hump titles are ordinary English words, but a
+// word joined to an identifier by a bare dot is not English: prose writes
+// "the timer. Autostart is" with a space, never "timer.autostart". So the
+// dotted form matches case-insensitively, which is what lets a lowercased
+// question reach the class page it spells out.
+//
+// Measured 2026-09-11 on the 4.7 corpus: "what does timer.autostart do, and
+// does it work for a timer that is added at runtime?" matched no title at all,
+// so the question fell through to LLM expansion and its kept set depended on
+// whether that nondeterministic expansion happened to say "Timer". With the
+// dotted rule it matches Timer directly, skips expansion, and returns the same
+// deterministic Timer-first set the capitalised spelling already got.
+export const namesTitle = (question: string, title: string): boolean =>
+    new RegExp(`\\b${escapeRegex(title)}\\b`, distinctiveTitle(title) ? 'i' : '').test(question)
+    || new RegExp(`\\b${escapeRegex(title)}\\.[A-Za-z_]`, 'i').test(question)
+
 // Chapter titles that appear verbatim in the question. Also the pipeline's
 // "does this question name a Godot symbol?" test: no match means casual
 // phrasing, which is when retrieve() reaches for LLM query expansion.
 export async function matchedTitles(question: string): Promise<string[]> {
-    return (await chapterList()).filter(t =>
-        new RegExp(`\\b${escapeRegex(t)}\\b`, distinctiveTitle(t) ? 'i' : '').test(question)
-    )
+    return (await chapterList()).filter(t => namesTitle(question, t))
 }
 
 // Near-title matching: the question names a chapter without quoting its title

@@ -107,11 +107,19 @@ export function mergeCandidates(...sources: StoredChunk[][]): StoredChunk[] {
 // `pinReserve` caps how many pins a ceiling may admit. Default Infinity, which
 // leaves the half-rule below in charge; the A/B harness sets it to 0 to measure
 // what reserving a pin slot actually buys.
+//
+// `answerFloor` is the nothing-found gate: when the BEST passage scores under
+// it, the pool holds no answer and the whole set is dropped, so the consumer
+// says "nothing in the documentation is about this" instead of reading out the
+// nearest unrelated page. See config.answerFloor for the measurement that fixed
+// it at -0.5. -Infinity turns it off, which is what scripts/ab-floor.ts uses
+// for its baseline arm.
 export type CutPolicy = {
     keep: number
     maxPassages: number
     maxGap: number
     pinReserve: number
+    answerFloor: number
 }
 
 export function defaultCut(): CutPolicy {
@@ -119,7 +127,8 @@ export function defaultCut(): CutPolicy {
         keep: config.rerankKeep,
         maxPassages: getOptions().maxPassages,
         maxGap: Number.POSITIVE_INFINITY,
-        pinReserve: Number.POSITIVE_INFINITY
+        pinReserve: Number.POSITIVE_INFINITY,
+        answerFloor: config.answerFloor
     }
 }
 
@@ -134,6 +143,12 @@ export function rankCandidates(
         .map((candidate, i) => ({...candidate, score: scores[i]!}))
         .sort((a, b) => b.score - a.score)
         .filter(candidate => candidate.score >= config.rerankThreshold)
+
+    // Nothing-found gate, before any of the shaping below: if the best thing in
+    // the pool is not an answer, a better-shaped set of the same pool is not an
+    // answer either. Dropping everything is what makes the consumer say the
+    // documentation has nothing on this, rather than quoting the least-bad page.
+    if ((ranked[0]?.score ?? Number.NEGATIVE_INFINITY) < cut.answerFloor) return []
 
     // Relative cut, inert at the default Infinity. Applied after the absolute
     // threshold and before everything else, so a gap arm and the count arms

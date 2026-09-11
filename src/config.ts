@@ -174,6 +174,29 @@ export const config = {
     titleTopK: 8,
     rerankKeep: 5,
     rerankThreshold: -4,
+    // The floor under the BEST passage in a pool. The -4 threshold above decides
+    // which passages are worth showing beside a good one; this decides whether
+    // there is a good one at all. Without it an off-corpus question is answered
+    // from whatever ranked least badly — "gofer node.set_cells cell parameter
+    // atlas source format" (a Gofer tool, not a Godot class) came back as a
+    // MultiMeshInstance2D passage at -1.75 after 13 s.
+    //
+    // -0.5, not 0. Measured over the 83 frozen pools x 3 epochs in
+    // scripts/ab-floor.ts, identical in every epoch:
+    //
+    //   floor      retrieval  paraphrase  fundamentals  realistic  refusals
+    //   none (-inf)      8/8       20/22         18/20      25/30       3/5
+    //   -0.5             8/8       20/22         18/20      25/30       4/5
+    //    0               8/8       19/22         18/20      21/30       4/5
+    //
+    // Both floors buy the same refusal ("how do i make a discord bot in
+    // gdscript", best -0.93). Zero costs five correct answers on top of it:
+    // casual questions whose right chapter sits just under zero — Canvas layers
+    // at -0.02 for "keep the UI in place while the camera moves", ConfigFile at
+    // -0.33 for "save the players high score", Multiple resolutions at -0.46 for
+    // "the game window looks tiny". The boundary between "unrelated" and
+    // "correct but casually asked" is at -0.5 in this corpus, not at 0.
+    answerFloor: -0.5,
     // Pairs per rerank forward pass. Every pair in a batch is padded to the
     // longest one, so a single 34-pair batch computes 1.38x the tokens it needs
     // (measured over 1091 pairs). Length-sorted batches of 4 cut that to 1.04x.

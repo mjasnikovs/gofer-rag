@@ -67,6 +67,7 @@
         "eval:answers": "bun run scripts/eval-answers.ts",
         "capture:pools": "bun run scripts/capture-pools.ts",
         "ab:cut": "bun run scripts/ab-cut.ts",
+        "ab:floor": "bun run scripts/ab-floor.ts",
         "test": "AGENT=1 bun test --coverage",
         "test:evals": "bun run eval:retrieval && bun run eval:fundamentals && bun run eval:paraphrase && bun run eval:realistic && bun run eval:coverage && bun run eval:coverage:lowercase",
         "test:llm": "bun run scripts/eval-llm-gate.ts",

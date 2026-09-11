@@ -55,13 +55,26 @@ Measured over the 83 labelled questions in this repo's eval sets (`bun run scrip
 
 | `maxPassages` | passages/call | share of the bytes | labelled cases lost |
 | ------------- | ------------- | ------------------ | ------------------- |
-| unset         | 4.75          | 100%               | —                   |
-| 4             | 3.77          | 79%                | none                |
-| 3             | 2.86          | 60%                | 2                   |
-| 2             | 1.93          | 40%                | 6                   |
+| unset         | 4.58          | 100%               | —                   |
+| 4             | 3.63          | 79%                | none                |
+| 3             | 2.73          | 60%                | 2                   |
+| 2             | 1.83          | 39%                | 6                   |
 
 Like every option here it is sticky: `configure()` merges into module-level state, so setting it once sets it for the
 process. `GOFER_RAG_MAX_PASSAGES` does the same from the environment.
+
+### Nothing found is an answer
+
+`retrieve()` returns an empty array when the corpus has nothing on the question, and `query()` returns `{found: false}`.
+That is a real result, not a failure — treat it as "the documentation does not cover this" and say so, rather than
+falling back to the nearest passage.
+
+Two gates produce it. A passage must clear the reranker threshold to be returned at all, and the _best_ passage must
+also clear an answer floor: a pool whose top scores below it holds no answer, only the page that ranked least badly.
+Without the floor, "gofer node.set_cells cell parameter atlas source format" — a question about a tool that is not in
+the Godot manual — came back as an unrelated tilemap passage. The floor sits at -0.5 rather than 0 because 0 also
+discards correct answers to casually worded questions, whose right chapter lands just under zero.
+`bun run scripts/ab-floor.ts` is the paired measurement.
 
 ## Supplying your own model connection
 

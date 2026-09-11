@@ -92,6 +92,13 @@ rank 1 satisfies every ceiling >= 1 and every gap >= 0, so no policy in this
 family can empty a non-empty set. (3/5 is the reranker threshold alone — the
 other two off-topic cases are the LLM gate's job and are not replayable here.)
 
+> Re-running `ab-cut.ts` today prints 4/5, not the 3/5 in this table. The
+> `answerFloor` gate landed on 2026-09-11 and is part of `defaultCut()`, so it
+> applies to every arm here equally and the comparison between arms is unchanged.
+> It is not in the cut family this page argues about: it reads rank 1's score and
+> empties the set, which is exactly the thing ceilings and gaps cannot do. The
+> measurement that set it is `scripts/ab-floor.ts`.
+
 ### The pin reservation pays for itself
 
 `rankCandidates` reserves up to half a ceiling's slots for pins. That rule was

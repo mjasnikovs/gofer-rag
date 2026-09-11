@@ -5,11 +5,16 @@
 // llama.cpp server, a GPU rerank box and 5.5 minutes, so they have never run in
 // CI and never will. This runs in milliseconds and covers the real pools.
 //
-// The golden file is the load-bearing part. `maxPassages` and `maxGap` default
-// to Infinity, so the default path is meant to be byte-identical to what shipped
-// before them — and a diff in kept-default.json is therefore a bug report, not a
-// number to update. Regenerate it ONLY when a deliberate change to
+// The golden file is the load-bearing part. A diff in kept-default.json is a bug
+// report, not a number to update. Regenerate it ONLY when a deliberate change to
 // rankCandidates lands: bun run scripts/capture-pools.ts --recut
+//
+// It has been regenerated once. `maxPassages` and `maxGap` default to Infinity
+// and are inert, but `answerFloor` does not: added 2026-09-11, it empties the
+// kept set when the best passage scores under -0.5. Four of the 83 questions
+// went to [] — discord bot, health bar, main menu, how big can my world be — and
+// all four were already counted wrong by their eval sets, so the suites did not
+// move. scripts/ab-floor.ts is the paired measurement.
 
 import {describe, expect, test} from 'bun:test'
 import {rankCandidates, defaultCut, type CutPolicy} from '../src/core/query'

@@ -36,6 +36,7 @@ const cut = (overrides: Partial<CutPolicy> = {}): CutPolicy => ({
     maxPassages: Number.POSITIVE_INFINITY,
     maxGap: Number.POSITIVE_INFINITY,
     pinReserve: Number.POSITIVE_INFINITY,
+    answerFloor: config.answerFloor,
     ...overrides
 })
 
@@ -67,6 +68,35 @@ describe('mergeCandidates', () => {
 })
 
 describe('rankCandidates', () => {
+    // The nothing-found gate. A pool whose best passage is under the floor holds
+    // no answer, so the consumer is told the documentation has nothing on this
+    // rather than being handed the least-bad page. Measured at -0.5 in
+    // scripts/ab-floor.ts; see config.answerFloor.
+    test('drops the whole set when the best passage is below the answer floor', () => {
+        const candidates = [chunk('1', 'MultiMeshInstance2D'), chunk('2', 'TileSet')]
+        const ranked = rankCandidates('gofer node.set_cells atlas source format', candidates, [-1.75, -2.4], [])
+
+        expect(ranked).toEqual([])
+    })
+
+    test('keeps a set whose best passage clears the floor, companions included', () => {
+        const candidates = [chunk('1', 'Canvas layers'), chunk('2', 'Parallax2D')]
+        const ranked = rankCandidates('keep the UI in place while the camera moves', candidates, [-0.02, -3.1], [])
+
+        expect(ranked.map(candidate => candidate.chapter)).toEqual(['Canvas layers', 'Parallax2D'])
+    })
+
+    test('the floor outranks the title pin, so a named chapter cannot rescue a dead pool', () => {
+        const ranked = rankCandidates(
+            'What is font_color on Tree?',
+            pinnable,
+            pinnableScores.map(() => -2),
+            ['Tree']
+        )
+
+        expect(ranked).toEqual([])
+    })
+
     test('sorts by score, applies the threshold, and enforces the keep limit', () => {
         const candidates = Array.from({length: 8}, (_, index) => chunk(String(index), `Chapter ${index}`))
         const scores = [8, 7, 6, 5, 4, 3, config.rerankThreshold - 1, config.rerankThreshold - 2]
