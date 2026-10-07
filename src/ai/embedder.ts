@@ -18,31 +18,24 @@
 // Asymmetric prompts: questions and documents get different prefixes. Both
 // live in prompts.ts so ingest and serve cannot drift.
 
-import {
-    AutoConfig,
-    AutoModel,
-    AutoTokenizer,
-    Tensor,
-    type PreTrainedModel,
-    type PreTrainedTokenizer
-} from '@huggingface/transformers'
+import {AutoConfig, AutoModel, AutoTokenizer, Tensor} from '@huggingface/transformers'
 import {config, getOptions} from '../config.js'
 import {authorizeModelDownload, embedDtype, progressCallback} from './downloads.js'
-import {loadFromCache} from './local-cache.js'
+import {loadFromCache, type LoadedModel} from './local-cache.js'
 import {queryText} from './prompts.js'
 
 // The model reads 8192 tokens; a chunk is at most ~1200. Questions arrive from
 // an LLM and can run long — the cap keeps one runaway request cheap.
 const MAX_TOKENS = 2048
 
-type LoadedEmbedder = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
-// transformers.js types every model output as `any`.
+// transformers.js types tokenizer and model outputs as `any`.
+type Encoded = {input_ids: Tensor; attention_mask: Tensor}
 type EmbeddingOutput = {sentence_embedding: Tensor}
 
 // The promise is cached, not the result, so two first calls share one load.
-const embedders = new Map<string, Promise<LoadedEmbedder>>()
+const embedders = new Map<string, Promise<LoadedModel>>()
 
-function load(): Promise<LoadedEmbedder> {
+function load(): Promise<LoadedModel> {
     const {cacheDir} = getOptions()
     const cached = embedders.get(cacheDir)
     if (cached) return cached
@@ -52,7 +45,7 @@ function load(): Promise<LoadedEmbedder> {
     return loading
 }
 
-async function loadInto(cacheDir: string): Promise<LoadedEmbedder> {
+async function loadInto(cacheDir: string): Promise<LoadedModel> {
     await authorizeModelDownload('embedder')
     const options = {cache_dir: cacheDir, progress_callback: progressCallback('embedder')}
     // quiet: 4.2.0 warns twice that embedding_gemma2 is unknown and that it is
@@ -81,7 +74,12 @@ const noMedia = () => new Tensor('float32', new Float32Array(0), [0, 512])
 
 async function embed(text: string): Promise<number[]> {
     const {tokenizer, model} = await load()
-    const encoded = tokenizer([text], {truncation: true, max_length: MAX_TOKENS})
+    const encoded = tokenizer([text], {truncation: true, max_length: MAX_TOKENS}) as unknown as Encoded
+    // transformers.js truncates after adding <bos> and <eos>, so a question past
+    // the cap would lose the <eos> every stored document was embedded with.
+    const ids = encoded.input_ids.data as BigInt64Array
+    const eos = BigInt(tokenizer.eos_token_id)
+    if (ids[ids.length - 1] !== eos) ids[ids.length - 1] = eos
     const output = (await model({
         ...encoded,
         image_features: noMedia(),

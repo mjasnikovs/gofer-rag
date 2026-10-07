@@ -51,7 +51,20 @@ describe('embedder stamp', () => {
         expect(databaseInfo()).rejects.toThrow('no readable embedder.json')
     })
 
-    test('a stamp that lies about the vector width is caught by the schema', async () => {
+    test('a stamp that is not an object is refused by name, not a TypeError', async () => {
+        const databasePath = await database(currentEmbedder().dims)
+        for (const content of ['null', '42', 'not json']) {
+            await writeFile(join(databasePath, 'embedder.json'), content)
+            expect(databaseInfo()).rejects.toThrow(EmbedderMismatchError)
+        }
+    })
+
+    test('the package entry point exports the error so consumers can catch it', async () => {
+        const entry = await import('../src/index')
+        expect(entry.EmbedderMismatchError).toBe(EmbedderMismatchError)
+    })
+
+    test('a stamp that lies about the vector width is caught by the stored rows', async () => {
         await database(1024)
         expect(databaseInfo()).rejects.toThrow('Differs: dims')
     })

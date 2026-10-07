@@ -74,6 +74,10 @@ for (const q of questions) {
 
     let worst = 0
     for (let i = 0; i < texts.length; i++) {
+        // -Infinity is a candidate the ONNX prefilter never scored, by design
+        // since the two-stage rerank; the box scores everything. Not a score to
+        // compare — counting it failed every run (44 "flips" on 2026-10-07).
+        if (!Number.isFinite(onnx[i]!)) continue
         const diff = Math.abs(onnx[i]! - box[i]!)
         worst = Math.max(worst, diff)
         maxDiff = Math.max(maxDiff, diff)
@@ -85,7 +89,9 @@ for (const q of questions) {
             // Gray zone is judged on the ONNX side — the calibrated reference.
             // Measured flips all had ONNX within ±0.5 of the threshold.
             if (Math.abs(onnx[i]! - t) <= 1) grayFlips++
-            console.log(`  THRESHOLD FLIP: onnx ${onnx[i]!.toFixed(2)} vs box ${box[i]!.toFixed(2)} (${candidates[i]!.chapter})`)
+            console.log(
+                `  THRESHOLD FLIP: onnx ${onnx[i]!.toFixed(2)} vs box ${box[i]!.toFixed(2)} (${candidates[i]!.chapter})`
+            )
         }
     }
     const top1Onnx = onnx.indexOf(Math.max(...onnx))
@@ -93,15 +99,15 @@ for (const q of questions) {
     if (top1Onnx !== top1Box) top1Disagreements++
 
     console.log(
-        `${q}\n  ${texts.length} candidates  onnx ${(onnxMs / 1000).toFixed(1)}s / box ${(boxMs / 1000).toFixed(1)}s  ` +
-            `top1 onnx ${onnx[top1Onnx]!.toFixed(2)} box ${box[top1Box]!.toFixed(2)}  worst |Δ| ${worst.toFixed(3)}  ` +
-            `top1 ${top1Onnx === top1Box ? 'agree' : 'DISAGREE'}`
+        `${q}\n  ${texts.length} candidates  onnx ${(onnxMs / 1000).toFixed(1)}s / box ${(boxMs / 1000).toFixed(1)}s  `
+            + `top1 onnx ${onnx[top1Onnx]!.toFixed(2)} box ${box[top1Box]!.toFixed(2)}  worst |Δ| ${worst.toFixed(3)}  `
+            + `top1 ${top1Onnx === top1Box ? 'agree' : 'DISAGREE'}`
     )
 }
 
 console.log(
-    `\n${pairs} pairs: mean |Δ| ${(sumDiff / pairs).toFixed(3)}, max |Δ| ${maxDiff.toFixed(3)}, ` +
-        `threshold flips ${flips}, top-1 disagreements ${top1Disagreements}`
+    `\n${pairs} pairs: mean |Δ| ${(sumDiff / pairs).toFixed(3)}, max |Δ| ${maxDiff.toFixed(3)}, `
+        + `threshold flips ${flips}, top-1 disagreements ${top1Disagreements}`
 )
 // Perfect parity is impossible: ONNX q8 and GGUF Q8_0 are different
 // quantizations of the same fp16 model, each with its own error, and the -4
@@ -115,5 +121,9 @@ console.log(
 const grayZoneFlipsOnly = flips === grayFlips
 const ok = sumDiff / pairs < 0.75 && grayZoneFlipsOnly
 if (!grayZoneFlipsOnly) console.log('a candidate flipped OUTSIDE the ±1 gray zone around the threshold')
-console.log(ok ? 'PASS — box logits track ONNX q8 within eval-validated tolerance' : 'FAIL — recalibrate before trusting the box')
+console.log(
+    ok ?
+        'PASS — box logits track ONNX q8 within eval-validated tolerance'
+    :   'FAIL — recalibrate before trusting the box'
+)
 process.exit(ok ? 0 : 1)

@@ -16,8 +16,9 @@
 // skipped finally leaked the embed box once).
 
 import {resolve} from 'node:path'
-import {existsSync, mkdirSync} from 'node:fs'
+import {existsSync} from 'node:fs'
 import {config} from '../src/config'
+import {ensureGguf} from '../ingest/gguf'
 
 const BOX = 'gofer-rerank'
 const repoRoot = resolve(import.meta.dir, '..')
@@ -99,17 +100,8 @@ if (!gpu) {
     process.exit(await runCommand())
 }
 
-if (!existsSync(ggufPath)) {
-    banner(['Downloading bge-reranker-v2-m3 Q8_0 GGUF (~600MB, one-time) ...'])
-    mkdirSync(resolve(ggufPath, '..'), {recursive: true})
-    const res = await fetch(config.rerankGgufUrl)
-    if (!res.ok) {
-        console.error(`download failed: ${res.status} ${res.statusText}`)
-        process.exit(1)
-    }
-    await Bun.write(`${ggufPath}.part`, res)
-    Bun.spawnSync(['mv', `${ggufPath}.part`, ggufPath])
-}
+if (!existsSync(ggufPath)) banner(['Downloading bge-reranker-v2-m3 Q8_0 GGUF (~600MB, one-time) ...'])
+await ensureGguf({path: ggufPath, url: config.rerankGgufUrl, sha256: config.rerankGgufSha256})
 
 banner(['Reranking in the llama.cpp box on GPU (~0.5s/query vs ~20s in-process).', gpu.note])
 

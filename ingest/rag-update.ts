@@ -18,8 +18,9 @@
 // path is chosen is announced LOUDLY so a slow CPU run is never a surprise.
 
 import {resolve} from 'node:path'
-import {existsSync, mkdirSync, rmSync} from 'node:fs'
+import {existsSync} from 'node:fs'
 import {config} from '../src/config'
+import {ensureGguf} from './gguf'
 
 const BOX = 'gofer-embed'
 const repoRoot = resolve(import.meta.dir, '..')
@@ -83,30 +84,9 @@ if (!sh(['docker', 'version']).ok) {
     process.exit(1)
 }
 
-// EmbeddingGemma 2 GGUF, fetched once. 310MB. The stored vectors are only
-// valid against this exact file, so it is checked on every run, not just after
-// the download.
-if (!existsSync(ggufPath)) {
-    banner(['Downloading EmbeddingGemma 2 Q8_0 GGUF (310MB, one-time) ...'])
-    mkdirSync(resolve(ggufPath, '..'), {recursive: true})
-    const res = await fetch(config.embedGgufUrl)
-    if (!res.ok) {
-        console.error(`download failed: ${res.status} ${res.statusText}`)
-        process.exit(1)
-    }
-    await Bun.write(`${ggufPath}.part`, res)
-    Bun.spawnSync(['mv', `${ggufPath}.part`, ggufPath])
-}
-const hasher = new Bun.CryptoHasher('sha256')
-for await (const chunk of Bun.file(ggufPath).stream()) hasher.update(chunk)
-const ggufHash = hasher.digest('hex')
-if (ggufHash !== config.embedGgufSha256) {
-    console.error(
-        `${ggufPath} has sha256 ${ggufHash}, expected ${config.embedGgufSha256}. Removed; re-run to fetch it again.`
-    )
-    rmSync(ggufPath)
-    process.exit(1)
-}
+// EmbeddingGemma 2 GGUF, fetched once (310MB) and hash-checked every run.
+if (!existsSync(ggufPath)) banner(['Downloading EmbeddingGemma 2 Q8_0 GGUF (310MB, one-time) ...'])
+await ensureGguf({path: ggufPath, url: config.embedGgufUrl, sha256: config.embedGgufSha256})
 
 const gpu = pickGpus()
 const image = gpu ? config.embedImageCuda : config.embedImageCpu

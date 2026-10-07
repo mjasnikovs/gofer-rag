@@ -17,6 +17,11 @@ export type {
     Source
 } from './types.js'
 
+// Thrown when the database was embedded by a different model or document format
+// than this package queries with. Rebuild or replace the database; a retry
+// cannot succeed.
+export {EmbedderMismatchError} from './store/db.js'
+
 export async function retrieve(question: string, options: GoferOptions = {}): Promise<RankedChunk[]> {
     const normalized = validateQuestion(question)
     configure(options)

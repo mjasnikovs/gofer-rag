@@ -35,8 +35,11 @@ if (process.env.EMBED_CHILD) {
 function onnxPass(dtype: string): number[][] {
     const child = Bun.spawnSync(['bun', 'run', import.meta.path], {
         env: {...process.env, EMBED_CHILD: '1', RAG_DTYPE: dtype},
-        stdout: 'pipe'
+        stdout: 'pipe',
+        stderr: 'inherit'
     })
+    // The child's error (e.g. download consent for fp32) is on stderr above.
+    if (!child.success) throw new Error(`${dtype} pass failed with exit code ${child.exitCode}`)
     return JSON.parse(child.stdout.toString().trim().split('\n').pop()!) as number[][]
 }
 const q8 = onnxPass('q8')

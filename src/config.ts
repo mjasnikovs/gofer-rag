@@ -141,6 +141,11 @@ export function getOptions(): ResolvedGoferOptions {
     }
 }
 
+// One llama.cpp build for both boxes, pinned by digest. b9837 cannot load
+// EmbeddingGemma 2 ("unknown model architecture: gemma-embedding2").
+const LLAMA_CPP_CUDA =
+    'ghcr.io/ggml-org/llama.cpp:server-cuda-b11459@sha256:fff6185edd2fbc4093aa5970bf6db53ed11c283e3a1c52a3e244cf27047264f4'
+
 // fp16 is not here on purpose: EmbeddingGemma 2 overflows it (see embedder.ts).
 export type EmbedDtype = 'q8' | 'fp32'
 
@@ -169,19 +174,22 @@ export const config = {
     embedGgufUrl:
         'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf',
     embedGgufSha256: '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135',
-    // Pinned by digest. llama.cpp b9837 cannot load EmbeddingGemma 2 at all
-    // ("unknown model architecture: gemma-embedding2"); b11459 matches the
-    // PyTorch reference at cosine ≥ 0.9991. A floating tag would also move the
-    // rerank box under a running A/B.
-    embedImageCuda:
-        'ghcr.io/ggml-org/llama.cpp:server-cuda-b11459@sha256:fff6185edd2fbc4093aa5970bf6db53ed11c283e3a1c52a3e244cf27047264f4',
+    // b11459 matches the PyTorch reference at cosine ≥ 0.9991. The CPU image is
+    // the same build; a floating tag would move either box under a running A/B.
+    embedImageCuda: LLAMA_CPP_CUDA,
     embedImageCpu:
         'ghcr.io/ggml-org/llama.cpp:server-b11459@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b',
-    rerankImageCuda:
-        'ghcr.io/ggml-org/llama.cpp:server-cuda-b11459@sha256:fff6185edd2fbc4093aa5970bf6db53ed11c283e3a1c52a3e244cf27047264f4',
+    // Same build as the embed box. Box logits on it track the ONNX q8 reranker
+    // at mean |Δ| 0.24, max 0.69 over 70 scored pairs, one flip inside the ±1
+    // gray zone (scripts/validate-llamacpp-rerank.ts, 2026-10-07).
+    rerankImageCuda: LLAMA_CPP_CUDA,
     embedPort: 8091,
     rerankGgufPath: '.models/gguf/bge-reranker-v2-m3-Q8_0.gguf',
-    rerankGgufUrl: 'https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q8_0.gguf',
+    rerankGgufUrl:
+        'https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/3093af03b1a635e67b084b1d8c03c5f5e020fd05/bge-reranker-v2-m3-Q8_0.gguf',
+    // The file behind every box run on this machine since 2026-07-13: its sha256
+    // matched the Hub's on 2026-10-07, and this pins that commit.
+    rerankGgufSha256: 'a43c7c9b11a4c1517e5bf95151960e1621d1b72f7a493364b01e386cf1aaa1d3',
     rerankPort: 8092,
     rerankUrl: process.env.RAG_RERANK_URL ?? '',
     chunkChars: 1800,

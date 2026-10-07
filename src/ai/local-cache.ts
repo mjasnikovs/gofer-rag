@@ -13,9 +13,16 @@
 // `env` is module-global and shared with any host that uses transformers.js
 // itself, so it is only changed for the length of a load and restored after.
 // Loads queue behind each other: two overlapping loads that each saved and
-// restored the env could leave it holding the other's values for good.
+// restored the env could leave it holding the other's values for good. A host
+// loading its own model at that same moment still sees these values; the env
+// is one object, so only the window can be kept short.
+//
+// The queue costs cold start 0.2–0.5 s against loading the three models in
+// parallel (1.26–1.56 s vs 1.04 s, measured 2026-10-07), once per process.
 
-import {LogLevel, env} from '@huggingface/transformers'
+import {LogLevel, env, type PreTrainedModel, type PreTrainedTokenizer} from '@huggingface/transformers'
+
+export type LoadedModel = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
 
 let queue: Promise<unknown> = Promise.resolve()
 

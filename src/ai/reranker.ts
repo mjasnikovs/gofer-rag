@@ -5,22 +5,16 @@
 // output label, and that pipeline softmaxes over it, which always yields 1.0 and
 // throws the score away. We call the model directly and read the raw logit.
 
-import {
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    type PreTrainedTokenizer,
-    type PreTrainedModel
-} from '@huggingface/transformers'
+import {AutoTokenizer, AutoModelForSequenceClassification} from '@huggingface/transformers'
 import {config, getOptions} from '../config.js'
 import {authorizeModelDownload, progressCallback} from './downloads.js'
-import {loadFromCache} from './local-cache.js'
+import {loadFromCache, type LoadedModel} from './local-cache.js'
 
-type LoadedReranker = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
 type Stage = 'reranker' | 'prefilter'
 
-const loadedRerankers = new Map<string, LoadedReranker>()
+const loadedRerankers = new Map<string, LoadedModel>()
 
-async function load(stage: Stage): Promise<LoadedReranker> {
+async function load(stage: Stage): Promise<LoadedModel> {
     const {cacheDir} = getOptions()
     const key = `${stage}:${cacheDir}`
     const cached = loadedRerankers.get(key)

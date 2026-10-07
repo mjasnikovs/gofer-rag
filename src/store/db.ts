@@ -57,14 +57,16 @@ const stampPath = () => join(getOptions().databasePath, 'embedder.json')
 async function checkEmbedder(table: lancedb.Table): Promise<void> {
     const expected = currentEmbedder()
     const where = getOptions().databasePath
-    let stamp: EmbedderStamp
+    let stamp: Partial<EmbedderStamp> | null = null
     try {
-        stamp = JSON.parse(await readFile(stampPath(), 'utf8')) as EmbedderStamp
+        stamp = JSON.parse(await readFile(stampPath(), 'utf8')) as Partial<EmbedderStamp> | null
     } catch {
-        throw new EmbedderMismatchError(
-            `${where} has no readable embedder.json, so its vectors cannot be matched to ${expected.model}. Rebuild it with \`bun run rag-update\`.`
-        )
+        // unreadable or not JSON: handled with the not-an-object case below
     }
+    if (typeof stamp !== 'object' || stamp === null)
+        throw new EmbedderMismatchError(
+            `${where} has no readable embedder.json, so its vectors cannot be matched to ${expected.model}. Use the database this package ships (leave databasePath unset), or rebuild it with \`bun run rag-update\` in the gofer-rag repository.`
+        )
     const differs = (Object.keys(expected) as (keyof EmbedderStamp)[]).filter(key => stamp[key] !== expected[key])
     // The width is read off a stored row; the stamp alone could lie.
     const [row] = (await table.query().limit(1).toArray()) as StoredChunk[]
