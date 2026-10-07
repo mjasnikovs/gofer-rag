@@ -9,3 +9,4 @@ dist/
 .bun/
 docs/GodotEngine.epub
 .pools/
+data/sft/
