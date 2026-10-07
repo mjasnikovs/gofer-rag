@@ -1,6 +1,6 @@
 // HTTP client for the llama.cpp embedding box. Document embeddings only —
-// serve-time query embeddings stay in-process (src/ai/embedder.ts, fp16), which
-// matches these vectors at cosine 0.9997 (validated).
+// serve-time query embeddings stay in-process (src/ai/embedder.ts, ONNX q8).
+// Texts arrive already formatted by prompts.documentText; this sends them as-is.
 
 const EMBED_URL = process.env.EMBED_URL ?? 'http://localhost:8091'
 

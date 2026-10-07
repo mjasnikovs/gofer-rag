@@ -3,7 +3,7 @@
         "21-4",
         "1662-1",
         "44-1",
-        "1645-14",
+        "1214-14",
         "364-2",
         "923-0 pinned"
     ],
@@ -37,7 +37,7 @@
     ],
     "How do I get a reference to another node from my script?": [
         "362-0",
-        "374-0",
+        "374-1",
         "512-32",
         "1644-2",
         "44-2"
@@ -53,36 +53,36 @@
         "90-1",
         "256-2",
         "253-0",
-        "548-0",
-        "249-7"
+        "33-3",
+        "548-0"
     ],
     "How do I read the keys and mouse buttons the player presses?": [
         "195-0",
         "1306-1",
         "25-1",
-        "196-1",
-        "953-3"
+        "1307-1",
+        "196-1"
     ],
     "How do I write my first script and attach it to a node?": [
         "19-0",
         "25-0",
         "18-0",
-        "1597-0",
-        "7-2"
+        "371-4",
+        "45-0"
     ],
     "How do I make a variable editable in the inspector?": [
         "1675-2",
+        "304-8",
         "341-4",
-        "304-0",
         "291-3",
-        "174-2"
+        "1583-0"
     ],
     "How do I store a value that every scene can read?": [
         "1483-0",
         "372-0",
         "367-0",
         "46-1",
-        "588-11"
+        "498-2"
     ],
     "How do I pause the game?": [
         "369-0",
@@ -93,17 +93,17 @@
     ],
     "How do I save the player progress to a file?": [
         "1239-0",
+        "185-0",
         "186-0",
         "455-2",
-        "370-0",
         "940-0"
     ],
     "How do I change to another scene from code?": [
         "367-0",
         "373-3",
-        "1483-6",
-        "1006-0",
-        "17-0"
+        "372-3",
+        "1483-1",
+        "362-2"
     ],
     "How do I keep the HUD on screen while the camera moves?": [
         "80-0",
@@ -117,14 +117,14 @@
         "1676-49",
         "208-2",
         "337-2",
-        "70-13"
+        "288-3"
     ],
     "How do I detect when two objects collide?": [
         "249-0",
         "522-0",
         "252-0",
         "37-0",
-        "523-0"
+        "25-5"
     ],
     "How do I make an object fall with gravity?": [
         "256-2",
@@ -138,33 +138,34 @@
         "530-0",
         "162-0",
         "46-0",
-        "29-0"
+        "529-0"
     ],
     "How do I make an enemy chase the player?": [
         "434-4",
         "549-0",
+        "253-1",
         "34-2",
-        "548-0",
-        "253-6"
+        "548-0"
     ],
     "How do I save the player's progress so it persists between sessions?": [
         "185-0",
         "1239-0",
+        "371-2",
         "186-0"
     ],
     "How do I make the camera smoothly follow the player character?": [
+        "206-1",
         "136-1",
+        "265-1",
         "539-4",
-        "434-5",
-        "256-2",
-        "16-0"
+        "434-5"
     ],
     "How do I play background music in my game?": [
         "38-4",
         "528-0",
         "29-0",
         "162-0",
-        "529-0"
+        "530-0"
     ],
     "How do I show the player's score as text on the screen?": [
         "38-0",
@@ -178,14 +179,14 @@
         "373-0",
         "1483-0",
         "1520-7",
-        "512-27"
+        "1344-27"
     ],
     "How do I generate random numbers?": [
         "1424-0",
         "1676-51",
         "208-1",
-        "1154-0",
-        "7-1"
+        "245-1",
+        "337-2"
     ],
     "How do I make my game adapt to different screen sizes?": [
         "402-0",
@@ -213,24 +214,24 @@
         "49-1",
         "254-0",
         "363-1",
-        "512-1"
+        "512-43"
     ],
     "How do I make one node notify another when something happens?": [
-        "1645-19",
-        "44-1",
-        "11-1",
+        "302-42",
         "21-6",
-        "345-11"
+        "345-11",
+        "49-5",
+        "1662-2"
     ],
     "How do I translate my game into multiple languages?": [
         "149-0",
         "290-0",
         "1517-0",
-        "1214-23",
-        "189-8"
+        "1645-23",
+        "189-1"
     ],
     "How do I keep the UI in place while the camera moves around?": [
-        "80-0",
+        "80-1",
         "265-1",
         "691-0",
         "690-0",
@@ -238,31 +239,31 @@
     ],
     "How do I create copies of a scene from code while the game runs?": [
         "362-2",
+        "291-8",
         "371-1",
-        "1483-0",
-        "17-0",
-        "1006-0"
+        "372-3",
+        "1483-0"
     ],
     "How do I find out which object is under the mouse cursor?": [
         "614-7",
         "565-35",
         "962-0",
         "774-33",
-        "1306-0"
+        "1306-2"
     ],
     "How do I smoothly animate a value from one number to another in code?": [
         "1520-0",
         "138-0",
         "520-0",
         "206-1",
-        "70-13"
+        "798-0"
     ],
     "How do I read which keys the player is pressing?": [
         "195-0",
         "25-1",
         "20-0",
         "1306-18",
-        "1344-23"
+        "512-23"
     ],
     "How do I store global game state that every scene can access?": [
         "46-1",
@@ -273,10 +274,10 @@
     ],
     "How do I make objects fall with gravity and bounce off each other?": [
         "721-0",
-        "701-0",
         "249-1",
+        "701-0",
         "17-2",
-        "558-0"
+        "738-0"
     ],
     "How do I add multiplayer over the network to my game?": [
         "1344-41",
@@ -287,24 +288,24 @@
     ],
     "What is a NavigationAgent2D used for?": [
         "663-0",
+        "669-0",
         "210-2",
         "221-0",
-        "218-6",
-        "763-12"
+        "218-6"
     ],
     "How does NavigationAgent2D obstacle avoidance work?": [
+        "218-4",
         "663-0",
         "219-3",
-        "210-2",
-        "663-3",
-        "1342-18"
+        "667-0",
+        "210-2"
     ],
     "What does the CharacterBody2D node do?": [
         "253-0",
         "548-0",
         "24-0",
         "700-1",
-        "16-0"
+        "249-7"
     ],
     "What is an AnimationPlayer node?": [
         "138-0",
@@ -318,13 +319,13 @@
         "284-4",
         "46-2",
         "1287-9",
-        "588-16"
+        "1582-16"
     ],
     "How do I export a variable so it shows in the inspector?": [
         "304-8",
-        "1675-10",
-        "341-4",
-        "174-2",
+        "1675-2",
+        "341-3",
+        "1258-3",
         "342-0"
     ],
     "How do I detect when a body enters an Area2D?": [
@@ -341,35 +342,35 @@
         "256-2",
         "548-0",
         "39-5",
-        "253-0"
+        "249-8"
     ],
     "why does my sprite look blurry when i scale it up": [
         "1450-65",
         "542-5",
+        "1422-178",
         "1173-1",
-        "89-2",
-        "774-12"
+        "89-2"
     ],
     "my game freezes for a second when i load a new level": [
         "1483-0",
         "373-3",
         "367-0",
         "183-0",
-        "1006-0"
+        "372-3"
     ],
     "the game window looks tiny on high resolution screens": [
         "295-1",
+        "58-0",
+        "786-12",
         "1422-60",
-        "61-1",
-        "457-2",
-        "1242-48"
+        "457-2"
     ],
     "how do i stop everything while the menu is open": [
         "369-1",
         "418-4",
         "1483-0",
-        "1520-3",
-        "373-0"
+        "201-1",
+        "1520-3"
     ],
     "how do i use raycst2d to detect walls": [
         "711-0",
@@ -379,18 +380,18 @@
         "522-1"
     ],
     "what does the anmiationplayer node do": [
-        "138-0",
         "521-0",
         "520-0",
         "142-0",
-        "519-0"
+        "519-0",
+        "799-0"
     ],
     "how do i add a colison shape to my player": [
         "31-1",
         "24-2",
         "433-0",
         "253-4",
-        "258-0"
+        "258-2"
     ],
     "how do i export my game to andriod": [
         "173-3",
@@ -416,9 +417,9 @@
     "how do i change the translation of a Spatial node": [
         "673-12",
         "1071-2",
+        "205-3",
         "716-0",
-        "1666-6",
-        "94-6"
+        "1666-6"
     ],
     "whats the difference between Area2D and StaticBody2D": [
         "249-5",
@@ -456,8 +457,8 @@
         "136-1",
         "265-2",
         "743-0",
-        "33-4",
-        "1520-0"
+        "539-3",
+        "33-4"
     ],
     "how do i save the players high score between sessions": [
         "1239-0",
@@ -467,15 +468,15 @@
         "529-0",
         "162-1",
         "25-5",
-        "528-0",
-        "24-2"
+        "530-5",
+        "528-0"
     ],
     "how do i make my character jump": [
-        "253-7",
+        "33-2",
         "434-4",
+        "253-7",
         "256-2",
-        "32-0",
-        "90-0"
+        "32-0"
     ],
     "how do i show a health bar above the player": [],
     "whats the difference between preload and load": [
@@ -489,22 +490,22 @@
         "749-2",
         "196-4",
         "24-0",
-        "554-3",
-        "557-0"
+        "25-5",
+        "554-3"
     ],
     "how do i make my character look at the mouse": [
         "90-1",
         "1050-0",
-        "434-3",
+        "434-5",
         "548-0",
-        "253-4"
+        "136-2"
     ],
     "how do i make an online multiplayer game": [
         "229-10",
         "1344-41",
         "1329-0",
         "1330-0",
-        "1481-2"
+        "1285-0"
     ],
     "does godot support c#": [
         "310-0",
@@ -514,7 +515,13 @@
         "18-2"
     ],
     "how big can my game world be before things break": [],
-    "how do i make a main menu with buttons": [],
+    "how do i make a main menu with buttons": [
+        "1582-3",
+        "285-1",
+        "1422-1",
+        "1322-0",
+        "1483-4"
+    ],
     "i get the error Attempt to call function 'play' in base 'null instance' on a null instance": [
         "25-3",
         "366-2",
@@ -524,18 +531,18 @@
     ],
     "Invalid get index 'position' (on base: 'null instance')": [
         "721-2",
+        "218-14",
         "701-0",
-        "523-1",
-        "549-0",
-        "733-6"
+        "1344-31",
+        "523-1"
     ],
     "how do i make a discord bot in gdscript": [],
     "how do i import my unity project into godot": [
+        "146-0",
         "17-1",
-        "150-0",
-        "70-2",
-        "31-0",
-        "14-3"
+        "286-2",
+        "56-1",
+        "150-0"
     ],
     "whats the best pizza topping": []
 }

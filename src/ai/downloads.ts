@@ -1,9 +1,9 @@
 import {stat} from 'node:fs/promises'
 import {join} from 'node:path'
-import {config, getOptions} from '../config.js'
+import {config, getOptions, type EmbedDtype} from '../config.js'
 import type {DownloadProgress, ModelDownload} from '../types.js'
 
-type ModelDefinition = {
+export type ModelDefinition = {
     id: string
     expectedBytes: number
     requiredFiles: string[]
@@ -17,21 +17,35 @@ type TransformerProgress = {
     progress?: number
 }
 
-const definitions: Record<'embedder' | 'reranker' | 'prefilter', ModelDefinition> = {
-    embedder: {
+// What each embedder dtype pulls from the Hub, byte for byte (HF file list,
+// 2026-10-07). The `.onnx_data` file holds the weights; the `.onnx` file is the
+// graph. tokenizer_config.json is listed because the tokenizer will not load
+// without it — a cache missing it is not usable offline.
+const embedderWeights: Record<EmbedDtype, {file: string; expectedBytes: number}> = {
+    q8: {file: 'onnx/model_quantized.onnx', expectedBytes: 346_397_233},
+    fp32: {file: 'onnx/model.onnx', expectedBytes: 1_116_768_801}
+}
+
+export function embedderDefinition(dtype: EmbedDtype): ModelDefinition {
+    const weights = embedderWeights[dtype] ?? embedderWeights.q8
+    return {
         id: config.embedModel,
-        expectedBytes: 1_211_945_830,
-        requiredFiles: ['config.json', 'tokenizer.json', 'onnx/model_fp16.onnx', 'onnx/model_fp16.onnx_data']
-    },
+        expectedBytes: weights.expectedBytes,
+        requiredFiles: ['config.json', 'tokenizer.json', 'tokenizer_config.json', weights.file, `${weights.file}_data`]
+    }
+}
+
+const definitions: Record<'embedder' | 'reranker' | 'prefilter', ModelDefinition> = {
+    embedder: embedderDefinition(config.embedDtype),
     reranker: {
         id: config.rerankModel,
         expectedBytes: 587_812_045,
-        requiredFiles: ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']
+        requiredFiles: ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx']
     },
     prefilter: {
         id: config.prefilterModel,
         expectedBytes: 23_856_961,
-        requiredFiles: ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']
+        requiredFiles: ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx']
     }
 }
 

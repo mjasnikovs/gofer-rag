@@ -55,10 +55,10 @@ Measured over the 83 labelled questions in this repo's eval sets (`bun run scrip
 
 | `maxPassages` | passages/call | share of the bytes | labelled cases lost |
 | ------------- | ------------- | ------------------ | ------------------- |
-| unset         | 4.58          | 100%               | —                   |
-| 4             | 3.63          | 79%                | none                |
-| 3             | 2.73          | 60%                | 2                   |
-| 2             | 1.83          | 39%                | 6                   |
+| unset         | 4.65          | 100%               | —                   |
+| 4             | 3.69          | 79%                | none                |
+| 3             | 2.77          | 60%                | 2                   |
+| 2             | 1.86          | 39%                | 6                   |
 
 Like every option here it is sticky: `configure()` merges into module-level state, so setting it once sets it for the
 process. `GOFER_RAG_MAX_PASSAGES` does the same from the environment.
@@ -97,7 +97,7 @@ exactly like an unreachable server — expansion is skipped and retrieval runs u
 
 Programmatic calls never prompt. On first use, callers must set `allowModelDownloads: true` or provide a consent
 callback. Without consent, the call fails before downloading and reports model names, sources, destinations, and
-expected sizes. The three runtime models require approximately 1.13 GiB, 0.55 GiB and 0.02 GiB. Cached models require no
+expected sizes. The three runtime models require approximately 0.32 GiB, 0.55 GiB and 0.02 GiB. Cached models require no
 consent.
 
 The default cache is the operating system's user cache directory:

@@ -6,6 +6,7 @@ import {mkdtemp} from 'node:fs/promises'
 import {configure, resetConfiguration} from '../src/config'
 import {
     authorizeModelDownloads,
+    embedderDefinition,
     isModelCached,
     modelDownload,
     progressCallback,
@@ -40,13 +41,12 @@ describe('model download consent', () => {
         })
         await authorizeModelDownloads(['embedder', 'reranker'])
         expect(offered.map(model => model.name)).toEqual([
-            'onnx-community/Qwen3-Embedding-0.6B-ONNX',
+            'onnx-community/embeddinggemma-2-ONNX',
             'onnx-community/bge-reranker-v2-m3-ONNX'
         ])
         expect(offered.every(model => model.source.startsWith('https://huggingface.co/'))).toBeTrue()
-        expect(
-            offered.every(model => model.destination.startsWith(cacheDir) && model.expectedBytes > 500_000_000)
-        ).toBeTrue()
+        expect(offered.every(model => model.destination.startsWith(cacheDir))).toBeTrue()
+        expect(offered.map(model => model.expectedBytes)).toEqual([346_397_233, 587_812_045])
     })
 
     test('honors explicit rejection before creating cache files', async () => {
@@ -65,7 +65,7 @@ describe('model download consent', () => {
         const cacheDir = await cacheDirectory()
         configure({cacheDir, allowModelDownloads: () => Promise.reject(new Error('must not prompt'))})
         const destination = modelDownload('reranker').destination
-        for (const file of ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']) {
+        for (const file of ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx']) {
             await mkdir(join(destination, file, '..'), {recursive: true})
             await writeFile(join(destination, file), 'cached')
         }
@@ -79,7 +79,7 @@ describe('model download consent', () => {
         progressCallback('embedder')({status: 'progress', file: 'model.onnx', loaded: 10, total: 100, progress: 10})
         expect(events).toEqual([
             {
-                model: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
+                model: 'onnx-community/embeddinggemma-2-ONNX',
                 status: 'progress',
                 file: 'model.onnx',
                 loaded: 10,
@@ -87,5 +87,32 @@ describe('model download consent', () => {
                 progress: 10
             }
         ])
+    })
+
+    test('a cache without tokenizer_config.json is not cached, since the tokenizer cannot load offline', async () => {
+        const cacheDir = await cacheDirectory()
+        configure({cacheDir})
+        const destination = modelDownload('reranker').destination
+        for (const file of ['config.json', 'tokenizer.json', 'onnx/model_quantized.onnx']) {
+            await mkdir(join(destination, file, '..'), {recursive: true})
+            await writeFile(join(destination, file), 'cached')
+        }
+        expect(await isModelCached('reranker')).toBeFalse()
+    })
+
+    test('the embedder manifest follows the dtype, weights file and its external data together', () => {
+        expect(embedderDefinition('q8')).toEqual({
+            id: 'onnx-community/embeddinggemma-2-ONNX',
+            expectedBytes: 346_397_233,
+            requiredFiles: [
+                'config.json',
+                'tokenizer.json',
+                'tokenizer_config.json',
+                'onnx/model_quantized.onnx',
+                'onnx/model_quantized.onnx_data'
+            ]
+        })
+        expect(embedderDefinition('fp32').requiredFiles.slice(3)).toEqual(['onnx/model.onnx', 'onnx/model.onnx_data'])
+        expect(embedderDefinition('fp32').expectedBytes).toBe(1_116_768_801)
     })
 })

@@ -7,6 +7,7 @@
 
 import {readChapters} from '../ingest/epub'
 import {chunkChapter} from '../ingest/chunk'
+import {documentText} from '../src/ai/prompts'
 
 const LLAMA_URL = process.env.LLAMA_URL ?? 'http://localhost:8089'
 const N = 8
@@ -20,7 +21,7 @@ function cosine(a: number[], b: number[]): number {
 const chapters = await readChapters()
 const all = chapters.flatMap(chunkChapter)
 const step = Math.floor(all.length / N)
-const texts = Array.from({length: N}, (_, i) => all[i * step]!.text)
+const texts = Array.from({length: N}, (_, i) => documentText(all[i * step]!.chapter, all[i * step]!.text))
 
 if (process.env.EMBED_CHILD) {
     const {embedDocuments} = await import('../src/ai/embedder')
@@ -29,8 +30,8 @@ if (process.env.EMBED_CHILD) {
 }
 
 // Each dtype in its own child process — transformers.js caches the pipeline
-// per-process, so two dtypes can't share one. fp16 is the reference: it exists
-// in .models (verified) and fp16-vs-fp32 error is negligible for embeddings.
+// per-process, so two dtypes can't share one. fp32 is the reference;
+// EmbeddingGemma 2 has no usable fp16 (its activations overflow it).
 function onnxPass(dtype: string): number[][] {
     const child = Bun.spawnSync(['bun', 'run', import.meta.path], {
         env: {...process.env, EMBED_CHILD: '1', RAG_DTYPE: dtype},
@@ -39,7 +40,7 @@ function onnxPass(dtype: string): number[][] {
     return JSON.parse(child.stdout.toString().trim().split('\n').pop()!) as number[][]
 }
 const q8 = onnxPass('q8')
-const fp32 = onnxPass('fp16')
+const fp32 = onnxPass('fp32')
 
 const res = await fetch(`${LLAMA_URL}/v1/embeddings`, {
     method: 'POST',
@@ -49,7 +50,7 @@ const res = await fetch(`${LLAMA_URL}/v1/embeddings`, {
 const json = (await res.json()) as {data: {index: number; embedding: number[]}[]}
 const llama = json.data.sort((a, b) => a.index - b.index).map(d => d.embedding)
 
-console.log('text          q8~fp16   llama~fp16   q8~llama')
+console.log('text          q8~fp32   llama~fp32   q8~llama')
 const stats = {a: [] as number[], b: [] as number[], c: [] as number[]}
 texts.forEach((_t, i) => {
     const a = cosine(q8[i]!, fp32[i]!)

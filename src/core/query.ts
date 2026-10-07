@@ -29,7 +29,7 @@ export type QueryDependencies = {
     matchedTitles: typeof matchedTitles
 }
 
-const defaultDependencies: QueryDependencies = {
+export const defaultDependencies: QueryDependencies = {
     embedQuery,
     loadEmbedder,
     rerank,

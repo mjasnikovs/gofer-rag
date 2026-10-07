@@ -26,7 +26,7 @@
 
 import {loadEmbedder} from '../src/ai/embedder'
 import {rerank, loadReranker} from '../src/ai/reranker'
-import {gatherCandidates, rankCandidates, defaultCut} from '../src/core/query'
+import {gatherCandidates, rankCandidates, defaultCut, defaultDependencies} from '../src/core/query'
 import {loadTable, databaseInfo, symbolTokens} from '../src/store/db'
 import {config} from '../src/config'
 import {loadPools, savePools, rehydrate, scoresOf, strip, type CapturedPool, type PoolFile} from './pools'
@@ -43,6 +43,12 @@ const GOLDEN = 'test/fixtures/kept-default.json'
 const argv = process.argv.slice(2)
 const verbose = argv.includes('--verbose')
 const epochs = Number(argv.find(a => a.startsWith('--epochs='))?.split('=')[1] ?? 1)
+// --expansions-from=<pools file>: replay that capture's LLM expansions instead
+// of asking the LLM. A re-capture of a changed store must see the same terms as
+// the capture it is compared with, or every pool moves for a reason unrelated
+// to the change (confound 1 in the A/B notes). Archive the file first — the
+// pool phase overwrites .pools/pools-full.ndjson.
+const expansionsFrom = argv.find(a => a.startsWith('--expansions-from='))?.split('=')[1]
 
 // Every question once, carrying the set(s) it came from. Two questions appear in
 // two sets each, and keying results by question text alone once let one set's
@@ -64,19 +70,26 @@ function questions(): Map<string, string[]> {
 // list, and an off-topic question is exactly the input that produces one, so an
 // empty expansion there is the design working rather than the model being down.
 function offTopic(): Set<string> {
-    return new Set(
-        [...retrieval, ...realistic].filter(c => c.expect === undefined).map(c => c.question)
-    )
+    return new Set([...retrieval, ...realistic].filter(c => c.expect === undefined).map(c => c.question))
 }
 
 async function capturePools(): Promise<void> {
     await Promise.all([loadEmbedder(), loadTable()])
     const asked = questions()
     const pools: CapturedPool[] = []
+    const pinned = expansionsFrom ? loadPools(expansionsFrom).pools : undefined
 
     for (let epoch = 0; epoch < epochs; epoch++) {
         for (const [question, suites] of asked) {
-            const {candidates, expansion, titles} = await gatherCandidates(question)
+            const old = pinned?.find(p => p.question === question && p.epoch === epoch)
+            if (pinned && !old) throw new Error(`${expansionsFrom} has no pool for epoch ${epoch}: ${question}`)
+            const dependencies =
+                old ? {...defaultDependencies, expandQuery: () => Promise.resolve(old.expansion)} : undefined
+            const {candidates, expansion, titles} = await gatherCandidates(question, dependencies)
+            // Titles decide whether expansion runs at all, so a pinned expansion
+            // is only the same input if the titles are the same too.
+            if (old && JSON.stringify(titles) !== JSON.stringify(old.titles))
+                throw new Error(`titles moved for "${question}": ${old.titles.join(', ')} -> ${titles.join(', ')}`)
             const symbols = symbolTokens(question)
             pools.push({
                 question,
@@ -105,7 +118,8 @@ async function capturePools(): Promise<void> {
             backend: 'unscored',
             rerankThreshold: config.rerankThreshold,
             prefilterKeep: config.prefilterKeep,
-            corpusRows: (await databaseInfo()).rows
+            corpusRows: (await databaseInfo()).rows,
+            embedModel: config.embedModel
         },
         pools
     })
@@ -117,7 +131,9 @@ async function capturePools(): Promise<void> {
     const answerable = pools.filter(p => p.titles.length === 0 && !refusable.has(p.question))
     const starved = answerable.filter(p => p.expansion === '')
     console.log(`pools: ${pools.length} written to ${FULL} (${asked.size} questions x ${epochs} epoch(s))`)
-    console.log(`expansion: ${answerable.length - starved.length}/${answerable.length} answerable title-less questions expanded`)
+    console.log(
+        `expansion: ${answerable.length - starved.length}/${answerable.length} answerable title-less questions expanded`
+    )
     if (starved.length > 2) {
         console.error(`CONTAMINATED — ${starved.length} answerable questions got no expansion, so the`)
         console.error('model was starved. Wait for localhost:8080/slots to idle and re-run.')
@@ -162,7 +178,8 @@ async function captureScores(): Promise<void> {
             chapter: c.chapter,
             order: c.order
         }))
-        const key = (chunks: {id: string; pinned?: true}[]) => chunks.map(c => `${c.id}${c.pinned ? 'P' : ''}`).join(',')
+        const key = (chunks: {id: string; pinned?: true}[]) =>
+            chunks.map(c => `${c.id}${c.pinned ? 'P' : ''}`).join(',')
         const a = key(rankCandidates(pool.question, real, scores, pool.titles, defaultCut()))
         const b = key(rankCandidates(pool.question, pool.candidates.map(rehydrate), scores, pool.titles, defaultCut()))
         if (a !== b) {
@@ -205,7 +222,9 @@ function recut(): void {
     mkdirSync('test/fixtures', {recursive: true})
     writeFileSync(GOLDEN, `${JSON.stringify(golden, null, 4)}\n`)
     const sizes = Object.values(golden).map(k => k.length)
-    console.log(`recut: ${sizes.length} questions, mean ${(sizes.reduce((a, b) => a + b, 0) / sizes.length).toFixed(2)} kept`)
+    console.log(
+        `recut: ${sizes.length} questions, mean ${(sizes.reduce((a, b) => a + b, 0) / sizes.length).toFixed(2)} kept`
+    )
 }
 
 if (argv.includes('--pools')) await capturePools()

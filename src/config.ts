@@ -141,6 +141,9 @@ export function getOptions(): ResolvedGoferOptions {
     }
 }
 
+// fp16 is not here on purpose: EmbeddingGemma 2 overflows it (see embedder.ts).
+export type EmbedDtype = 'q8' | 'fp32'
+
 // Retrieval tuning and ingestion-only settings remain centralized here. Runtime
 // paths and remote configuration are resolved by getOptions() above.
 export const config = {
@@ -150,18 +153,30 @@ export const config = {
         return getOptions().databasePath
     },
     table: 'chunks',
-    embedModel: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
+    embedModel: 'onnx-community/embeddinggemma-2-ONNX',
     rerankModel: 'onnx-community/bge-reranker-v2-m3-ONNX',
     prefilterModel: 'Xenova/ms-marco-MiniLM-L-6-v2',
-    embedDtype: (process.env.RAG_DTYPE ?? 'fp16') as 'q8' | 'fp16' | 'fp32',
+    embedDtype: (process.env.RAG_DTYPE ?? 'q8') as EmbedDtype,
     rerankDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
     prefilterDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
-    embedDims: 1024,
+    embedDims: 768,
     device: (process.env.RAG_DEVICE ?? 'cpu') as 'cpu' | 'cuda' | 'auto',
-    embedGgufPath: '.models/gguf/Qwen3-Embedding-0.6B-Q8_0.gguf',
-    embedGgufUrl: 'https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf',
-    embedImageCuda: 'ghcr.io/ggml-org/llama.cpp:server-cuda',
-    embedImageCpu: 'ghcr.io/ggml-org/llama.cpp:server',
+    // Pinned to a commit: ggml-org reconverts its GGUFs automatically, and the
+    // stored vectors are only valid against the file that produced them.
+    embedGgufPath: '.models/gguf/embeddinggemma-2-Q8_0.gguf',
+    embedGgufUrl:
+        'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf',
+    embedGgufSha256: '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135',
+    // Pinned by digest. llama.cpp b9837 cannot load EmbeddingGemma 2 at all
+    // ("unknown model architecture: gemma-embedding2"); b11459 matches the
+    // PyTorch reference at cosine ≥ 0.9991. A floating tag would also move the
+    // rerank box under a running A/B.
+    embedImageCuda:
+        'ghcr.io/ggml-org/llama.cpp:server-cuda-b11459@sha256:fff6185edd2fbc4093aa5970bf6db53ed11c283e3a1c52a3e244cf27047264f4',
+    embedImageCpu:
+        'ghcr.io/ggml-org/llama.cpp:server-b11459@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b',
+    rerankImageCuda:
+        'ghcr.io/ggml-org/llama.cpp:server-cuda-b11459@sha256:fff6185edd2fbc4093aa5970bf6db53ed11c283e3a1c52a3e244cf27047264f4',
     embedPort: 8091,
     rerankGgufPath: '.models/gguf/bge-reranker-v2-m3-Q8_0.gguf',
     rerankGgufUrl: 'https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q8_0.gguf',
@@ -196,6 +211,20 @@ export const config = {
     // -0.33 for "save the players high score", Multiple resolutions at -0.46 for
     // "the game window looks tiny". The boundary between "unrelated" and
     // "correct but casually asked" is at -0.5 in this corpus, not at 0.
+    //
+    // Re-measured 2026-10-07 after the EmbeddingGemma 2 swap, same pinned
+    // expansions: -0.5 is still the best row.
+    //
+    //   floor      retrieval  paraphrase  fundamentals  realistic  refusals
+    //   none (-inf)      8/8       20/22         19/20      27/30       2/5
+    //   -0.5             8/8       20/22         19/20      26/30       4/5
+    //    0               8/8       20/22         18/20      21/30       4/5
+    //
+    // The new vectors bring "Who won the 2022 FIFA World Cup?" a passage at
+    // -3.08, above the -4 threshold, so without a floor it is answered. The
+    // answer -0.5 costs, "how big can my game world be before things break",
+    // tops out at -2.79. Any floor low enough to keep it lets the discord bait
+    // (-0.90) through, and sits within 0.3 of the FIFA one.
     answerFloor: -0.5,
     // Pairs per rerank forward pass. Every pair in a batch is padded to the
     // longest one, so a single 34-pair batch computes 1.38x the tokens it needs

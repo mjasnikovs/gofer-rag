@@ -138,7 +138,7 @@ const started = sh([
     `${resolve(ggufPath, '..')}:/models:ro`,
     '-p',
     `${config.rerankPort}:8080`,
-    config.embedImageCuda,
+    config.rerankImageCuda,
     '-m',
     `/models/${ggufPath.split('/').pop()}`,
     '--rerank',

@@ -2,7 +2,10 @@
 // The open table is cached so we don't reconnect on every query.
 
 import * as lancedb from '@lancedb/lancedb'
+import {readFile, writeFile} from 'node:fs/promises'
+import {join} from 'node:path'
 import {config, getOptions} from '../config.js'
+import {DOCUMENT_FORMAT, QUERY_PREFIX} from '../ai/prompts.js'
 import type {StoredChunk} from '../types.js'
 
 let cachedTable: lancedb.Table | null = null
@@ -21,14 +24,65 @@ export async function recreateTable(rows: StoredChunk[]): Promise<void> {
     if (names.includes(config.table)) await db.dropTable(config.table)
     const table = await db.createTable(config.table, rows)
     await table.createIndex('text', {config: lancedb.Index.fts()})
+    await writeFile(stampPath(), `${JSON.stringify(currentEmbedder(), null, 4)}\n`)
     cachedTable = null
+}
+
+// Which embedder produced the stored vectors. Query vectors are only comparable
+// with document vectors from the same model and the same prompt formats, and a
+// mismatch fails silently: a different model of the same width returns
+// confident nonsense, and a different width fails deep inside LanceDB. So
+// ingest stamps the database and every open checks the stamp.
+export type EmbedderStamp = {
+    model: string
+    dims: number
+    queryPrefix: string
+    documentFormat: string
+}
+
+export class EmbedderMismatchError extends Error {
+    override name = 'EmbedderMismatchError'
+}
+
+export function currentEmbedder(): EmbedderStamp {
+    return {
+        model: config.embedModel,
+        dims: config.embedDims,
+        queryPrefix: QUERY_PREFIX,
+        documentFormat: DOCUMENT_FORMAT
+    }
+}
+
+const stampPath = () => join(getOptions().databasePath, 'embedder.json')
+
+async function checkEmbedder(table: lancedb.Table): Promise<void> {
+    const expected = currentEmbedder()
+    const where = getOptions().databasePath
+    let stamp: EmbedderStamp
+    try {
+        stamp = JSON.parse(await readFile(stampPath(), 'utf8')) as EmbedderStamp
+    } catch {
+        throw new EmbedderMismatchError(
+            `${where} has no readable embedder.json, so its vectors cannot be matched to ${expected.model}. Rebuild it with \`bun run rag-update\`.`
+        )
+    }
+    const differs = (Object.keys(expected) as (keyof EmbedderStamp)[]).filter(key => stamp[key] !== expected[key])
+    const vector = (await table.schema()).fields.find(field => field.name === 'vector')
+    const width = (vector?.type as {listSize?: number} | undefined)?.listSize
+    if (width !== expected.dims) differs.push('dims')
+    if (differs.length === 0) return
+    throw new EmbedderMismatchError(
+        `${where} was embedded with ${stamp.model} (${width} dims); this package queries with ${expected.model} (${expected.dims} dims). Differs: ${[...new Set(differs)].join(', ')}.`
+    )
 }
 
 async function getTable(): Promise<lancedb.Table> {
     const databasePath = getOptions().databasePath
     if (!cachedTable || cachedPath !== databasePath) {
         const db = await connect()
-        cachedTable = await db.openTable(config.table)
+        const table = await db.openTable(config.table)
+        await checkEmbedder(table)
+        cachedTable = table
         cachedPath = databasePath
     }
     return cachedTable

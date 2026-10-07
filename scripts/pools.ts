@@ -71,6 +71,9 @@ export type PoolStamp = {
     rerankThreshold: number
     prefilterKeep: number
     corpusRows: number
+    // Which query embedder built the candidate pools. Absent in captures from
+    // before 2026-10-07, which were all Qwen3-Embedding-0.6B.
+    embedModel?: string
 }
 
 export type PoolFile = {

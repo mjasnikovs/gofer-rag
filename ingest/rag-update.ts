@@ -4,27 +4,28 @@
 // and the LanceDB write are plain host work. The only heavy lifting, embedding,
 // happens in a STOCK llama.cpp server container that does embedding and nothing
 // else: no custom image, no baked node_modules, just the official
-// ghcr.io/ggml-org/llama.cpp image plus the official Qwen3-Embedding-0.6B GGUF
-// (auto-downloaded to .models/gguf on first run).
+// ghcr.io/ggml-org/llama.cpp image plus ggml-org's EmbeddingGemma 2 GGUF
+// (auto-downloaded to .models/gguf on first run, checked against its sha256).
 //
-// Why llama.cpp and not ONNX in the box (all measured on this machine):
-//   - fidelity: GGUF Q8_0 matches the true model space at cosine 0.9997; the old
-//     ONNX q8 sat at 0.91 — llama.cpp is the more accurate embedder.
-//   - speed: 300 chunks in 9.9s on GPU vs 26.9s ONNX-CUDA fp16 vs ~432s CPU q8.
-//   - --pooling mean matches the serve-time transformers.js query embedder.
+// Why llama.cpp and not ONNX in the box (measured on this machine):
+//   - fidelity: GGUF Q8_0 matches the PyTorch fp32 reference at cosine ≥ 0.9991
+//     on all 7671 chunks, the serve-time q8 ONNX query vectors at ≥ 0.99994.
+//   - speed: the full corpus in ~2 min on one GPU (2026-10-07).
+//   - --pooling mean is the model's own pooling. The 512→768 projection after
+//     it is inside the GGUF graph, so the box returns the finished vector.
 //
 // The box uses the GPU when a card has room, otherwise the CPU image. Whichever
 // path is chosen is announced LOUDLY so a slow CPU run is never a surprise.
 
 import {resolve} from 'node:path'
-import {existsSync, mkdirSync} from 'node:fs'
+import {existsSync, mkdirSync, rmSync} from 'node:fs'
 import {config} from '../src/config'
 
 const BOX = 'gofer-embed'
 const repoRoot = resolve(import.meta.dir, '..')
 const ggufPath = resolve(repoRoot, config.embedGgufPath)
 
-// The 0.6B Q8_0 model + context buffers want well under 2GB; below this much
+// The 270M Q8_0 model + context buffers want well under 2GB; below this much
 // free VRAM the card is busy (usually the 27B llama.cpp server) — use CPU.
 const MIN_FREE_MIB = 3000
 
@@ -82,9 +83,11 @@ if (!sh(['docker', 'version']).ok) {
     process.exit(1)
 }
 
-// Official Qwen GGUF, fetched once. 639MB.
+// EmbeddingGemma 2 GGUF, fetched once. 310MB. The stored vectors are only
+// valid against this exact file, so it is checked on every run, not just after
+// the download.
 if (!existsSync(ggufPath)) {
-    banner(['Downloading Qwen3-Embedding-0.6B Q8_0 GGUF (639MB, one-time) ...'])
+    banner(['Downloading EmbeddingGemma 2 Q8_0 GGUF (310MB, one-time) ...'])
     mkdirSync(resolve(ggufPath, '..'), {recursive: true})
     const res = await fetch(config.embedGgufUrl)
     if (!res.ok) {
@@ -93,6 +96,14 @@ if (!existsSync(ggufPath)) {
     }
     await Bun.write(`${ggufPath}.part`, res)
     Bun.spawnSync(['mv', `${ggufPath}.part`, ggufPath])
+}
+const ggufHash = new Bun.CryptoHasher('sha256').update(await Bun.file(ggufPath).arrayBuffer()).digest('hex')
+if (ggufHash !== config.embedGgufSha256) {
+    console.error(
+        `${ggufPath} has sha256 ${ggufHash}, expected ${config.embedGgufSha256}. Removed; re-run to fetch it again.`
+    )
+    rmSync(ggufPath)
+    process.exit(1)
 }
 
 const gpu = pickGpus()
@@ -111,8 +122,8 @@ else
         'Free the GPU and re-run to use the fast path.'
     ])
 
-// The box: llama.cpp server, embeddings only. --pooling mean matches the
-// serve-time transformers.js embedder (validated — do not change casually).
+// The box: llama.cpp server, embeddings only. --pooling mean is EmbeddingGemma's
+// own pooling (validated against PyTorch — do not change casually).
 sh(['docker', 'rm', '-f', BOX]) // clear any stale box from a crashed run
 const started = sh([
     'docker',

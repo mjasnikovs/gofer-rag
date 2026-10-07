@@ -9,6 +9,7 @@
 import {readChapters} from './epub'
 import {chunkChapter} from './chunk'
 import {embedDocuments} from './embed'
+import {documentText, hasSpecialToken} from '../src/ai/prompts'
 import {recreateTable} from '../src/store/db'
 import {config} from '../src/config'
 import type {StoredChunk} from '../src/types'
@@ -31,6 +32,15 @@ let chunks = chapters.flatMap(chunkChapter)
 if (chunks.length > MAX_CHUNKS) chunks = chunks.slice(0, MAX_CHUNKS)
 console.log(`  ${chunks.length} chunks`)
 
+// documentText drops Gemma control tokens such as <|image|>, so a chunk holding
+// one would be embedded as different text than it stores. None do today; stop
+// here if the docs ever grow one rather than store a vector that lies.
+const special = chunks.filter(c => hasSpecialToken(c.text) || hasSpecialToken(c.chapter))
+if (special.length > 0) {
+    console.error(`chunks contain Gemma special tokens: ${special.map(c => c.id).join(', ')}`)
+    process.exit(1)
+}
+
 // Embed shortest-first so each padded batch holds similar-length texts. Padding
 // every batch to its longest member is wasted compute; grouping by length cuts it.
 // Row order in LanceDB is irrelevant — each chunk keeps its chapter/order metadata.
@@ -40,7 +50,7 @@ console.log(`Embedding (${embedLabel}) ...`)
 const rows: StoredChunk[] = []
 for (let i = 0; i < ordered.length; i += BATCH_SIZE) {
     const batch = ordered.slice(i, i + BATCH_SIZE)
-    const vectors = await embedDocuments(batch.map(c => c.text))
+    const vectors = await embedDocuments(batch.map(c => documentText(c.chapter, c.text)))
     batch.forEach((chunk, j) =>
         rows.push({id: chunk.id, vector: vectors[j]!, text: chunk.text, chapter: chunk.chapter, order: chunk.order})
     )

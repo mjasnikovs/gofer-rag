@@ -12,4 +12,7 @@ Changes made: the English EPUB was converted to plain text, navigation and marku
 overlapping passages, metadata was retained for chapter attribution, and numeric embeddings plus search indexes were
 generated. This package is not endorsed by or affiliated with the Godot Engine project.
 
+The embeddings were computed with Google's EmbeddingGemma 2 (`google/embeddinggemma-2`, Apache License 2.0). At query
+time the package downloads its ONNX conversion, `onnx-community/embeddinggemma-2-ONNX`, under the same license.
+
 License texts are included as `LICENSE-DATA-CC-BY-3.0.txt` and `LICENSE-DATA-MIT.txt`.

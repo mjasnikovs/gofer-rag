@@ -2,12 +2,13 @@
 // first N chunks of the EPUB, shortest-first ordering, batches of 32.
 //
 //   MODE=llama LLAMA_URL=http://localhost:8089 bun run scripts/bench-embed.ts
-//   MODE=onnx RAG_DEVICE=cuda RAG_DTYPE=fp16 bun run scripts/bench-embed.ts   (inside the box)
+//   MODE=onnx RAG_DTYPE=q8 bun run scripts/bench-embed.ts
 //
 // Known baseline to beat: ~432s for 300 chunks, ONNX q8 on host CPU.
 
 import {readChapters} from '../ingest/epub'
 import {chunkChapter} from '../ingest/chunk'
+import {documentText} from '../src/ai/prompts'
 
 const MODE = process.env.MODE ?? 'llama'
 const N = Number(process.env.BENCH_CHUNKS) || 300
@@ -44,8 +45,10 @@ console.log(`model ready in ${((Date.now() - loadStart) / 1000).toFixed(1)}s`)
 const t0 = Date.now()
 let dims = 0
 for (let i = 0; i < ordered.length; i += BATCH) {
-    const vectors = await embedBatch(ordered.slice(i, i + BATCH).map(c => c.text))
+    const vectors = await embedBatch(ordered.slice(i, i + BATCH).map(c => documentText(c.chapter, c.text)))
     dims = vectors[0]!.length
 }
 const secs = (Date.now() - t0) / 1000
-console.log(`embedded ${ordered.length} chunks (${dims}-dim) in ${secs.toFixed(1)}s → ${(ordered.length / secs).toFixed(1)} chunks/s`)
+console.log(
+    `embedded ${ordered.length} chunks (${dims}-dim) in ${secs.toFixed(1)}s → ${(ordered.length / secs).toFixed(1)} chunks/s`
+)
