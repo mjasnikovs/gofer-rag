@@ -12,17 +12,25 @@ import {loadFromCache, type LoadedModel} from './local-cache.js'
 
 type Stage = 'reranker' | 'prefilter'
 
-const loadedRerankers = new Map<string, LoadedModel>()
+// The promise is cached, not the result, so two first calls share one load.
+const loadedRerankers = new Map<string, Promise<LoadedModel>>()
 
-async function load(stage: Stage): Promise<LoadedModel> {
+function load(stage: Stage): Promise<LoadedModel> {
     const {cacheDir} = getOptions()
     const key = `${stage}:${cacheDir}`
     const cached = loadedRerankers.get(key)
     if (cached) return cached
+    const loading = loadInto(stage, cacheDir)
+    loadedRerankers.set(key, loading)
+    loading.catch(() => loadedRerankers.delete(key))
+    return loading
+}
+
+async function loadInto(stage: Stage, cacheDir: string): Promise<LoadedModel> {
     await authorizeModelDownload(stage)
     const progress = progressCallback(stage)
     const id = stage === 'reranker' ? config.rerankModel : config.prefilterModel
-    const loaded = await loadFromCache(cacheDir, async () => {
+    return loadFromCache(cacheDir, async () => {
         const tokenizer = await AutoTokenizer.from_pretrained(id, {
             cache_dir: cacheDir,
             progress_callback: progress
@@ -35,8 +43,6 @@ async function load(stage: Stage): Promise<LoadedModel> {
         })
         return {tokenizer, model}
     })
-    loadedRerankers.set(key, loaded)
-    return loaded
 }
 
 // Warm the models so the first real request isn't slow. When a rerank box is

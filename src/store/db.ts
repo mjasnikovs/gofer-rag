@@ -67,14 +67,15 @@ async function checkEmbedder(table: lancedb.Table): Promise<void> {
         throw new EmbedderMismatchError(
             `${where} has no readable embedder.json, so its vectors cannot be matched to ${expected.model}. Use the database this package ships (leave databasePath unset), or rebuild it with \`bun run rag-update\` in the gofer-rag repository.`
         )
-    const differs = (Object.keys(expected) as (keyof EmbedderStamp)[]).filter(key => stamp[key] !== expected[key])
-    // The width is read off a stored row; the stamp alone could lie.
+    const differs: string[] = (['model', 'documentFormat'] as const).filter(key => stamp[key] !== expected[key])
+    // The width comes off a stored row, not the stamp: the rows are what a query
+    // vector is compared against.
     const [row] = (await table.query().limit(1).toArray()) as StoredChunk[]
     const width = row?.vector.length
-    if (width !== expected.dims) differs.push('dims')
+    if (width !== expected.dims) differs.push(`vector width ${width} (stamp says ${stamp.dims})`)
     if (differs.length === 0) return
     throw new EmbedderMismatchError(
-        `${where} was embedded with ${stamp.model} (${width} dims); this package queries with ${expected.model} (${expected.dims} dims). Differs: ${[...new Set(differs)].join(', ')}.`
+        `${where} was embedded with ${stamp.model}; this package queries with ${expected.model} (${expected.dims} dims). Differs: ${differs.join(', ')}.`
     )
 }
 

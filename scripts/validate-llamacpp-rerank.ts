@@ -94,8 +94,12 @@ for (const q of questions) {
             )
         }
     }
-    const top1Onnx = onnx.indexOf(Math.max(...onnx))
-    const top1Box = box.indexOf(Math.max(...box))
+    // Top-1 over the candidates both sides scored: the box's best may be one the
+    // ONNX prefilter never looked at, which is no disagreement about a score.
+    const scored = onnx.map((_, i) => i).filter(i => Number.isFinite(onnx[i]!))
+    const best = (scores: number[]) => scored.reduce((a, b) => (scores[b]! > scores[a]! ? b : a))
+    const top1Onnx = best(onnx)
+    const top1Box = best(box)
     if (top1Onnx !== top1Box) top1Disagreements++
 
     console.log(
@@ -105,6 +109,7 @@ for (const q of questions) {
     )
 }
 
+if (pairs === 0) throw new Error('no candidate was scored by both sides: nothing to compare')
 console.log(
     `\n${pairs} pairs: mean |Δ| ${(sumDiff / pairs).toFixed(3)}, max |Δ| ${maxDiff.toFixed(3)}, `
         + `threshold flips ${flips}, top-1 disagreements ${top1Disagreements}`

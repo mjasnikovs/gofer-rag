@@ -66,6 +66,6 @@ describe('embedder stamp', () => {
 
     test('a stamp that lies about the vector width is caught by the stored rows', async () => {
         await database(1024)
-        expect(databaseInfo()).rejects.toThrow('Differs: dims')
+        expect(databaseInfo()).rejects.toThrow('Differs: vector width 1024 (stamp says 768)')
     })
 })

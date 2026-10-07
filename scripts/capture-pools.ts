@@ -48,7 +48,7 @@ const epochs = Number(argv.find(a => a.startsWith('--epochs='))?.split('=')[1] ?
 // the capture it is compared with, or every pool moves for a reason unrelated
 // to the change (confound 1 in the A/B notes). Archive the file first — the
 // pool phase overwrites .pools/pools-full.ndjson.
-const expansionsFrom = argv.find(a => a.startsWith('--expansions-from='))?.split('=')[1]
+const expansionsFrom = argv.find(a => a.startsWith('--expansions-from='))?.slice('--expansions-from='.length)
 
 // Every question once, carrying the set(s) it came from. Two questions appear in
 // two sets each, and keying results by question text alone once let one set's

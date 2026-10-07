@@ -28,8 +28,7 @@ import {queryText} from './prompts.js'
 // an LLM and can run long — the cap keeps one runaway request cheap.
 const MAX_TOKENS = 2048
 
-// transformers.js types tokenizer and model outputs as `any`.
-type Encoded = {input_ids: Tensor; attention_mask: Tensor}
+// transformers.js types model outputs as `any`.
 type EmbeddingOutput = {sentence_embedding: Tensor}
 
 // The promise is cached, not the result, so two first calls share one load.
@@ -74,7 +73,7 @@ const noMedia = () => new Tensor('float32', new Float32Array(0), [0, 512])
 
 async function embed(text: string): Promise<number[]> {
     const {tokenizer, model} = await load()
-    const encoded = tokenizer([text], {truncation: true, max_length: MAX_TOKENS}) as unknown as Encoded
+    const encoded = tokenizer([text], {truncation: true, max_length: MAX_TOKENS})
     // transformers.js truncates after adding <bos> and <eos>, so a question past
     // the cap would lose the <eos> every stored document was embedded with.
     const ids = encoded.input_ids.data as BigInt64Array
