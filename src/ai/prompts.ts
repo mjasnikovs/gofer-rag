@@ -36,8 +36,15 @@ const SPECIAL_TOKENS = [
 ]
 const SPECIAL_TOKEN = new RegExp(SPECIAL_TOKENS.map(token => token.replace(/[|]/g, '\\|')).join('|'), 'g')
 
+// Until nothing changes: one pass over "<|ima<pad>ge|>" would remove <pad> and
+// hand the tokenizer the "<|image|>" it just put back together.
 export function cleanText(text: string): string {
-    return text.replace(SPECIAL_TOKEN, '')
+    let cleaned = text.replace(SPECIAL_TOKEN, '')
+    while (cleaned !== text) {
+        text = cleaned
+        cleaned = text.replace(SPECIAL_TOKEN, '')
+    }
+    return cleaned
 }
 
 export function hasSpecialToken(text: string): boolean {
@@ -51,12 +58,16 @@ export function hasSpecialToken(text: string): boolean {
 // buttons"). The rule was set before the run: a variant had to gain 5.
 export const QUERY_PREFIX = 'task: code retrieval | query: '
 
-export const DOCUMENT_FORMAT = 'title: {title} | text: {text}'
-
 export function queryText(question: string): string {
     return `${QUERY_PREFIX}${cleanText(question)}`
 }
 
+// A template literal, not String.replace on a format string: replace would
+// expand `$&` or `$'` in a title, and a title holding "{text}" would take the
+// body. No chapter title has either today.
 export function documentText(title: string, text: string): string {
-    return DOCUMENT_FORMAT.replace('{title}', cleanText(title)).replace('{text}', () => cleanText(text))
+    return `title: ${cleanText(title)} | text: ${cleanText(text)}`
 }
+
+// The format the stored vectors were embedded with, recorded in the store stamp.
+export const DOCUMENT_FORMAT = documentText('{title}', '{text}')

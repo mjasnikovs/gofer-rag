@@ -4,7 +4,7 @@
 //   MODE=llama LLAMA_URL=http://localhost:8089 bun run scripts/bench-embed.ts
 //   MODE=onnx RAG_DTYPE=q8 bun run scripts/bench-embed.ts
 //
-// Known baseline to beat: ~432s for 300 chunks, ONNX q8 on host CPU.
+// Old baseline, Qwen3-Embedding ONNX q8 on host CPU: ~432s for 300 chunks.
 
 import {readChapters} from '../ingest/epub'
 import {chunkChapter} from '../ingest/chunk'
@@ -18,7 +18,8 @@ const LLAMA_URL = process.env.LLAMA_URL ?? 'http://localhost:8089'
 const chapters = await readChapters()
 const chunks = chapters.flatMap(chunkChapter).slice(0, N)
 const ordered = [...chunks].sort((a, b) => a.text.length - b.text.length)
-console.log(`${MODE}: ${ordered.length} chunks, batch ${BATCH}`)
+// The in-process embedder runs one text at a time; only the box batches.
+console.log(`${MODE}: ${ordered.length} chunks, ${MODE === 'llama' ? `batch ${BATCH}` : 'one text per run'}`)
 
 let embedBatch: (texts: string[]) => Promise<number[][]>
 const loadStart = Date.now()

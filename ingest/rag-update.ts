@@ -97,7 +97,9 @@ if (!existsSync(ggufPath)) {
     await Bun.write(`${ggufPath}.part`, res)
     Bun.spawnSync(['mv', `${ggufPath}.part`, ggufPath])
 }
-const ggufHash = new Bun.CryptoHasher('sha256').update(await Bun.file(ggufPath).arrayBuffer()).digest('hex')
+const hasher = new Bun.CryptoHasher('sha256')
+for await (const chunk of Bun.file(ggufPath).stream()) hasher.update(chunk)
+const ggufHash = hasher.digest('hex')
 if (ggufHash !== config.embedGgufSha256) {
     console.error(
         `${ggufPath} has sha256 ${ggufHash}, expected ${config.embedGgufSha256}. Removed; re-run to fetch it again.`

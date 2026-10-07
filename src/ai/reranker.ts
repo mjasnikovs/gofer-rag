@@ -13,7 +13,7 @@ import {
 } from '@huggingface/transformers'
 import {config, getOptions} from '../config.js'
 import {authorizeModelDownload, progressCallback} from './downloads.js'
-import {useLocalCache} from './local-cache.js'
+import {loadFromCache} from './local-cache.js'
 
 type LoadedReranker = {tokenizer: PreTrainedTokenizer; model: PreTrainedModel}
 type Stage = 'reranker' | 'prefilter'
@@ -26,20 +26,21 @@ async function load(stage: Stage): Promise<LoadedReranker> {
     const cached = loadedRerankers.get(key)
     if (cached) return cached
     await authorizeModelDownload(stage)
-    useLocalCache(cacheDir)
     const progress = progressCallback(stage)
     const id = stage === 'reranker' ? config.rerankModel : config.prefilterModel
-    const tokenizer = await AutoTokenizer.from_pretrained(id, {
-        cache_dir: cacheDir,
-        progress_callback: progress
+    const loaded = await loadFromCache(cacheDir, async () => {
+        const tokenizer = await AutoTokenizer.from_pretrained(id, {
+            cache_dir: cacheDir,
+            progress_callback: progress
+        })
+        const model = await AutoModelForSequenceClassification.from_pretrained(id, {
+            dtype: stage === 'reranker' ? config.rerankDtype : config.prefilterDtype,
+            device: config.device,
+            cache_dir: cacheDir,
+            progress_callback: progress
+        })
+        return {tokenizer, model}
     })
-    const model = await AutoModelForSequenceClassification.from_pretrained(id, {
-        dtype: stage === 'reranker' ? config.rerankDtype : config.prefilterDtype,
-        device: config.device,
-        cache_dir: cacheDir,
-        progress_callback: progress
-    })
-    const loaded = {tokenizer, model}
     loadedRerankers.set(key, loaded)
     return loaded
 }

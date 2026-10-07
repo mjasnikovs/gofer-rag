@@ -156,7 +156,9 @@ export const config = {
     embedModel: 'onnx-community/embeddinggemma-2-ONNX',
     rerankModel: 'onnx-community/bge-reranker-v2-m3-ONNX',
     prefilterModel: 'Xenova/ms-marco-MiniLM-L-6-v2',
-    embedDtype: (process.env.RAG_DTYPE ?? 'q8') as EmbedDtype,
+    // Checked where it is used (downloads.embedDtype), not here: a bad value must
+    // fail the call that needs the model, not every import of the package.
+    embedDtype: process.env.RAG_DTYPE ?? 'q8',
     rerankDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
     prefilterDtype: 'q8' as 'q8' | 'fp16' | 'fp32',
     embedDims: 768,

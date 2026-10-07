@@ -6,6 +6,7 @@ import {mkdtemp} from 'node:fs/promises'
 import {configure, resetConfiguration} from '../src/config'
 import {
     authorizeModelDownloads,
+    embedDtype,
     embedderDefinition,
     isModelCached,
     modelDownload,
@@ -98,6 +99,13 @@ describe('model download consent', () => {
             await writeFile(join(destination, file), 'cached')
         }
         expect(await isModelCached('reranker')).toBeFalse()
+    })
+
+    test('an unsupported RAG_DTYPE fails before consent instead of checking the q8 files', () => {
+        expect(embedDtype('q8')).toBe('q8')
+        expect(embedDtype('fp32')).toBe('fp32')
+        expect(() => embedDtype('q4')).toThrow('RAG_DTYPE=q4 is not supported')
+        expect(() => embedDtype('fp16')).toThrow('fp16 overflows')
     })
 
     test('the embedder manifest follows the dtype, weights file and its external data together', () => {

@@ -26,8 +26,15 @@ const embedderWeights: Record<EmbedDtype, {file: string; expectedBytes: number}>
     fp32: {file: 'onnx/model.onnx', expectedBytes: 1_116_768_801}
 }
 
+// The one gate on RAG_DTYPE. Anything else would make the consent check look
+// at one dtype's files while the loader fetches another's.
+export function embedDtype(value: string = config.embedDtype): EmbedDtype {
+    if (value === 'q8' || value === 'fp32') return value
+    throw new Error(`RAG_DTYPE=${value} is not supported: EmbeddingGemma 2 runs as q8 or fp32 (fp16 overflows it)`)
+}
+
 export function embedderDefinition(dtype: EmbedDtype): ModelDefinition {
-    const weights = embedderWeights[dtype] ?? embedderWeights.q8
+    const weights = embedderWeights[dtype]
     return {
         id: config.embedModel,
         expectedBytes: weights.expectedBytes,
@@ -35,8 +42,9 @@ export function embedderDefinition(dtype: EmbedDtype): ModelDefinition {
     }
 }
 
-const definitions: Record<'embedder' | 'reranker' | 'prefilter', ModelDefinition> = {
-    embedder: embedderDefinition(config.embedDtype),
+type ModelKind = 'embedder' | 'reranker' | 'prefilter'
+
+const rerankers: Record<Exclude<ModelKind, 'embedder'>, ModelDefinition> = {
     reranker: {
         id: config.rerankModel,
         expectedBytes: 587_812_045,
@@ -49,24 +57,28 @@ const definitions: Record<'embedder' | 'reranker' | 'prefilter', ModelDefinition
     }
 }
 
+function definition(kind: ModelKind): ModelDefinition {
+    return kind === 'embedder' ? embedderDefinition(embedDtype()) : rerankers[kind]
+}
+
 const approved = new Set<string>()
 
-export function modelDownload(kind: keyof typeof definitions): ModelDownload {
-    const definition = definitions[kind]
+export function modelDownload(kind: ModelKind): ModelDownload {
+    const model = definition(kind)
     const cacheDir = getOptions().cacheDir
     return {
-        name: definition.id,
-        source: `https://huggingface.co/${definition.id}`,
-        destination: join(cacheDir, definition.id),
-        expectedBytes: definition.expectedBytes
+        name: model.id,
+        source: `https://huggingface.co/${model.id}`,
+        destination: join(cacheDir, model.id),
+        expectedBytes: model.expectedBytes
     }
 }
 
-export async function isModelCached(kind: keyof typeof definitions): Promise<boolean> {
+export async function isModelCached(kind: ModelKind): Promise<boolean> {
     const download = modelDownload(kind)
     try {
         const files = await Promise.all(
-            definitions[kind].requiredFiles.map(file => stat(join(download.destination, file)))
+            definition(kind).requiredFiles.map(file => stat(join(download.destination, file)))
         )
         if (files.some(file => !file.isFile() || file.size === 0)) return false
         return true
@@ -75,11 +87,11 @@ export async function isModelCached(kind: keyof typeof definitions): Promise<boo
     }
 }
 
-export async function authorizeModelDownload(kind: keyof typeof definitions): Promise<void> {
+export async function authorizeModelDownload(kind: ModelKind): Promise<void> {
     await authorizeModelDownloads([kind])
 }
 
-export async function authorizeModelDownloads(kinds: (keyof typeof definitions)[]): Promise<void> {
+export async function authorizeModelDownloads(kinds: ModelKind[]): Promise<void> {
     const missing: ModelDownload[] = []
     for (const kind of kinds) {
         const download = modelDownload(kind)
@@ -96,8 +108,8 @@ export async function authorizeModelDownloads(kinds: (keyof typeof definitions)[
     for (const download of missing) approved.add(download.destination)
 }
 
-export function progressCallback(kind: keyof typeof definitions): (event: TransformerProgress) => void {
-    const model = definitions[kind].id
+export function progressCallback(kind: ModelKind): (event: TransformerProgress) => void {
+    const model = definition(kind).id
     return event => {
         const progress: DownloadProgress = {
             model,

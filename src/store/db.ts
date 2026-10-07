@@ -5,7 +5,7 @@ import * as lancedb from '@lancedb/lancedb'
 import {readFile, writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {config, getOptions} from '../config.js'
-import {DOCUMENT_FORMAT, QUERY_PREFIX} from '../ai/prompts.js'
+import {DOCUMENT_FORMAT} from '../ai/prompts.js'
 import type {StoredChunk} from '../types.js'
 
 let cachedTable: lancedb.Table | null = null
@@ -32,11 +32,11 @@ export async function recreateTable(rows: StoredChunk[]): Promise<void> {
 // with document vectors from the same model and the same prompt formats, and a
 // mismatch fails silently: a different model of the same width returns
 // confident nonsense, and a different width fails deep inside LanceDB. So
-// ingest stamps the database and every open checks the stamp.
+// ingest stamps the database and every open checks the stamp. The query prefix
+// is not in it: it shapes no stored vector, and changing it needs no re-ingest.
 export type EmbedderStamp = {
     model: string
     dims: number
-    queryPrefix: string
     documentFormat: string
 }
 
@@ -48,7 +48,6 @@ export function currentEmbedder(): EmbedderStamp {
     return {
         model: config.embedModel,
         dims: config.embedDims,
-        queryPrefix: QUERY_PREFIX,
         documentFormat: DOCUMENT_FORMAT
     }
 }
@@ -67,8 +66,9 @@ async function checkEmbedder(table: lancedb.Table): Promise<void> {
         )
     }
     const differs = (Object.keys(expected) as (keyof EmbedderStamp)[]).filter(key => stamp[key] !== expected[key])
-    const vector = (await table.schema()).fields.find(field => field.name === 'vector')
-    const width = (vector?.type as {listSize?: number} | undefined)?.listSize
+    // The width is read off a stored row; the stamp alone could lie.
+    const [row] = (await table.query().limit(1).toArray()) as StoredChunk[]
+    const width = row?.vector.length
     if (width !== expected.dims) differs.push('dims')
     if (differs.length === 0) return
     throw new EmbedderMismatchError(

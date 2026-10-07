@@ -1,6 +1,5 @@
 {
     "model": "onnx-community/embeddinggemma-2-ONNX",
     "dims": 768,
-    "queryPrefix": "task: code retrieval | query: ",
     "documentFormat": "title: {title} | text: {text}"
 }
